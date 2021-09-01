@@ -1,6 +1,7 @@
-pynacl==1.2.1
-discord.py[voice]==1.2.5
+pynacl>=1.2.1
+discord.py[voice]>=1.2.5
 pip
 youtube_dl
 colorlog
+websockets
 cffi --only-binary all; sys_platform == 'win32'
