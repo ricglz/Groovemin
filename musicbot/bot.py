@@ -1311,8 +1311,9 @@ class MusicBot(discord.Client):
                 'https://open.spotify.com/playlist/4WD020ni5crJZqLS52OG1b?si=2b13f296b27d4384')
 
     async def cmd_playall(self, message, player, channel, author, permissions, leftover_args):
-        self.cmd_playnormie(message, player, channel, author, permissions, leftover_args)
-        return self.cmd_playweeb(message, player, channel, author, permissions, leftover_args)
+        await self.cmd_playnormie(message, player, channel, author, permissions, leftover_args)
+        await self.cmd_playweeb(message, player, channel, author, permissions, leftover_args)
+        return await self.cmd_shuffle(channel, player)
 
     async def _handle_spotify(self, message, player, channel, author, permissions, leftover_args, song_url):
         if 'open.spotify.com' in song_url:
