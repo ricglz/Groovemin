@@ -1300,6 +1300,67 @@ class MusicBot(discord.Client):
             )
         return True
 
+    async def cmd_playnormie(self, message, player, channel, author, permissions, leftover_args):
+        return await self.cmd_play(message, player, channel, author, permissions,
+                leftover_args,
+                'https://open.spotify.com/playlist/5P3fE2ejED3frBeXIFAvI2?si=1ca42012385f47ca')
+
+    async def cmd_playweeb(self, message, player, channel, author, permissions, leftover_args):
+        return await self.cmd_play(message, player, channel, author, permissions,
+                leftover_args,
+                'https://open.spotify.com/playlist/4WD020ni5crJZqLS52OG1b?si=2b13f296b27d4384')
+
+    async def cmd_playall(self, message, player, channel, author, permissions, leftover_args):
+        self.cmd_playnormie(message, player, channel, author, permissions, leftover_args)
+        return self.cmd_playweeb(message, player, channel, author, permissions, leftover_args)
+
+    async def _handle_spotify(self, message, player, channel, author, permissions, leftover_args, song_url):
+        if 'open.spotify.com' in song_url:
+            song_url = 'spotify:' + re.sub('(http[s]?:\/\/)?(open.spotify.com)\/', '', song_url).replace('/', ':')
+            # remove session id (and other query stuff)
+            song_url = re.sub('\?.*', '', song_url)
+        if song_url.startswith('spotify:'):
+            parts = song_url.split(":")
+            try:
+                if 'track' in parts:
+                    res = await self.spotify.get_track(parts[-1])
+                    song_url = res['artists'][0]['name'] + ' ' + res['name']
+
+                elif 'album' in parts:
+                    res = await self.spotify.get_album(parts[-1])
+                    await self._do_playlist_checks(permissions, player, author, res['tracks']['items'])
+                    procmesg = await self.safe_send_message(channel, self.str.get('cmd-play-spotify-album-process', 'Processing album `{0}` (`{1}`)').format(res['name'], song_url))
+                    for i in res['tracks']['items']:
+                        song_url = i['name'] + ' ' + i['artists'][0]['name']
+                        log.debug('Processing {0}'.format(song_url))
+                        await self.cmd_play(message, player, channel, author, permissions, leftover_args, song_url)
+                    await self.safe_delete_message(procmesg)
+                    return Response(self.str.get('cmd-play-spotify-album-queued', "Enqueued `{0}` with **{1}** songs.").format(res['name'], len(res['tracks']['items'])))
+
+                elif 'playlist' in parts:
+                    res = []
+                    r = await self.spotify.get_playlist_tracks(parts[-1])
+                    while True:
+                        res.extend(r['items'])
+                        if r['next'] is not None:
+                            r = await self.spotify.make_spotify_req(r['next'])
+                            continue
+                        else:
+                            break
+                    await self._do_playlist_checks(permissions, player, author, res)
+                    procmesg = await self.safe_send_message(channel, self.str.get('cmd-play-spotify-playlist-process', 'Processing playlist `{0}` (`{1}`)').format(parts[-1], song_url))
+                    for i in res:
+                        song_url = i['track']['name'] + ' ' + i['track']['artists'][0]['name']
+                        log.debug('Processing {0}'.format(song_url))
+                        await self.cmd_play(message, player, channel, author, permissions, leftover_args, song_url)
+                    await self.safe_delete_message(procmesg)
+                    return Response(self.str.get('cmd-play-spotify-playlist-queued', "Enqueued `{0}` with **{1}** songs.").format(parts[-1], len(res)))
+
+                else:
+                    raise exceptions.CommandError(self.str.get('cmd-play-spotify-unsupported', 'That is not a supported Spotify URI.'), expire_in=30)
+            except exceptions.SpotifyError:
+                raise exceptions.CommandError(self.str.get('cmd-play-spotify-invalid', 'You either provided an invalid URI, or there was a problem.'))
+
     async def cmd_play(self, message, player, channel, author, permissions, leftover_args, song_url):
         """
         Usage:
@@ -1336,51 +1397,10 @@ class MusicBot(discord.Client):
         song_url = "https://www.youtube.com/playlist?" + groups[0] if len(groups) > 0 else song_url
 
         if self.config._spotify:
-            if 'open.spotify.com' in song_url:
-                song_url = 'spotify:' + re.sub('(http[s]?:\/\/)?(open.spotify.com)\/', '', song_url).replace('/', ':')
-                # remove session id (and other query stuff)
-                song_url = re.sub('\?.*', '', song_url)
-            if song_url.startswith('spotify:'):
-                parts = song_url.split(":")
-                try:
-                    if 'track' in parts:
-                        res = await self.spotify.get_track(parts[-1])
-                        song_url = res['artists'][0]['name'] + ' ' + res['name'] 
-
-                    elif 'album' in parts:
-                        res = await self.spotify.get_album(parts[-1])
-                        await self._do_playlist_checks(permissions, player, author, res['tracks']['items'])
-                        procmesg = await self.safe_send_message(channel, self.str.get('cmd-play-spotify-album-process', 'Processing album `{0}` (`{1}`)').format(res['name'], song_url))
-                        for i in res['tracks']['items']:
-                            song_url = i['name'] + ' ' + i['artists'][0]['name']
-                            log.debug('Processing {0}'.format(song_url))
-                            await self.cmd_play(message, player, channel, author, permissions, leftover_args, song_url)
-                        await self.safe_delete_message(procmesg)
-                        return Response(self.str.get('cmd-play-spotify-album-queued', "Enqueued `{0}` with **{1}** songs.").format(res['name'], len(res['tracks']['items'])))
-                    
-                    elif 'playlist' in parts:
-                        res = []
-                        r = await self.spotify.get_playlist_tracks(parts[-1])
-                        while True:
-                            res.extend(r['items'])
-                            if r['next'] is not None:
-                                r = await self.spotify.make_spotify_req(r['next'])
-                                continue
-                            else:
-                                break
-                        await self._do_playlist_checks(permissions, player, author, res)
-                        procmesg = await self.safe_send_message(channel, self.str.get('cmd-play-spotify-playlist-process', 'Processing playlist `{0}` (`{1}`)').format(parts[-1], song_url))
-                        for i in res:
-                            song_url = i['track']['name'] + ' ' + i['track']['artists'][0]['name']
-                            log.debug('Processing {0}'.format(song_url))
-                            await self.cmd_play(message, player, channel, author, permissions, leftover_args, song_url)
-                        await self.safe_delete_message(procmesg)
-                        return Response(self.str.get('cmd-play-spotify-playlist-queued', "Enqueued `{0}` with **{1}** songs.").format(parts[-1], len(res)))
-                    
-                    else:
-                        raise exceptions.CommandError(self.str.get('cmd-play-spotify-unsupported', 'That is not a supported Spotify URI.'), expire_in=30)
-                except exceptions.SpotifyError:
-                    raise exceptions.CommandError(self.str.get('cmd-play-spotify-invalid', 'You either provided an invalid URI, or there was a problem.'))
+            spotify_result = await self._handle_spotify(message, player,
+                    channel, author, permissions, leftover_args, song_url)
+            if spotify_result is not None:
+                return spotify_result
 
         # This lock prevent spamming play command to add entries that exceeds time limit/ maximum song limit
         async with self.aiolocks[_func_() + ':' + str(author.id)]:
