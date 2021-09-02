@@ -72,9 +72,9 @@ class MusicBot(discord.Client):
         self.last_status = None
 
         self.config = Config(config_file)
-        
+
         self._setup_logging()
-        
+
         self.permissions = Permissions(perms_file, grant_all=[self.config.owner_id])
         self.str = Json(self.config.i18n_file)
 
@@ -990,7 +990,7 @@ class MusicBot(discord.Client):
                             await s.leave()
                             log.info('Left {} due to bot owner not found'.format(s.name))
             if unavailable_servers != 0:
-                log.info('Not proceeding with checks in {} servers due to unavailability'.format(str(unavailable_servers))) 
+                log.info('Not proceeding with checks in {} servers due to unavailability'.format(str(unavailable_servers)))
 
         elif self.guilds:
             log.warning("Owner could not be found on any guild (id: %s)\n" % self.config.owner_id)
@@ -1064,7 +1064,7 @@ class MusicBot(discord.Client):
         else:
             log.info("Not autojoining any voice channels")
             self.autojoin_channels = set()
-        
+
         if self.config.show_config_at_start:
             print(flush=True)
             log.info("Options:")
@@ -2078,7 +2078,7 @@ class MusicBot(discord.Client):
             else:
                 print("Something strange is happening.  "
                       "You might want to restart the bot if it doesn't start working.")
-        
+
         current_entry = player.current_entry
 
         if (param.lower() in ['force', 'f']) or self.config.legacy_skip:
@@ -2422,10 +2422,10 @@ class MusicBot(discord.Client):
 
         if user_mentions:
             user = user_mentions[0]
-            
+
         if not user_mentions and not target:
             user = author
-            
+
         if not user_mentions and target:
             user = guild.get_member_named(target)
             if user == None:
@@ -2434,8 +2434,8 @@ class MusicBot(discord.Client):
                 except discord.NotFound:
                     return Response("Invalid user ID or server nickname, please double check all typing and try again.", reply=False, delete_after=30)
 
-        permissions = self.permissions.for_user(user)    
-                    
+        permissions = self.permissions.for_user(user)
+
         if user == author:
             lines = ['Command permissions in %s\n' % guild.name, '```', '```']
         else:
@@ -2527,7 +2527,7 @@ class MusicBot(discord.Client):
         """
         Usage:
             {command_prefix}disconnect
-        
+
         Forces the bot leave the current voice channel.
         """
         await self.disconnect_voice_client(guild)
@@ -2537,7 +2537,7 @@ class MusicBot(discord.Client):
         """
         Usage:
             {command_prefix}restart
-        
+
         Restarts the bot.
         Will not properly load new dependencies or file updates unless fully shutdown
         and restarted.
@@ -2556,15 +2556,15 @@ class MusicBot(discord.Client):
         """
         Usage:
             {command_prefix}shutdown
-        
+
         Disconnects from voice channels and closes the bot process.
         """
         await self.safe_send_message(channel, "\N{WAVING HAND SIGN}")
-        
+
         player = self.get_player_in(channel.guild)
         if player and player.is_paused:
             player.resume()
-        
+
         await self.disconnect_all_voice_clients()
         raise exceptions.TerminateSignal()
 
@@ -2662,7 +2662,7 @@ class MusicBot(discord.Client):
             log.warning("Ignoring command from other bot ({})".format(message.content))
             return
 
-        if (not isinstance(message.channel, discord.abc.GuildChannel)) and (not isinstance(message.channel, discord.abc.PrivateChannel)):
+        if not isinstance(message.channel, (discord.abc.GuildChannel, discord.abc.PrivateChannel)):
             return
 
         command, *args = message_content.split(' ')  # Uh, doesn't this break prefixes with spaces in them (it doesn't, config parser already breaks them)
@@ -2700,10 +2700,8 @@ class MusicBot(discord.Client):
 
         if message.author.id in self.blacklist and message.author.id != self.config.owner_id:
             log.warning("User blacklisted: {0.id}/{0!s} ({1})".format(message.author, command))
-            return
 
-        else:
-            log.info("{0.id}/{0!s}: {1}".format(message.author, message_content.replace('\n', '\n... ')))
+        log.info("{0.id}/{0!s}: {1}".format(message.author, message_content.replace('\n', '\n... ')))
 
         user_permissions = self.permissions.for_user(message.author)
 
@@ -2910,7 +2908,7 @@ class MusicBot(discord.Client):
         def is_active(member):
             if not member.voice:
                 return False
-                
+
             if any([member.voice.deaf, member.voice.self_deaf, member.bot]):
                 return False
 
@@ -2956,7 +2954,7 @@ class MusicBot(discord.Client):
                         channel = player.voice_client.channel,
                         reason = ""
                     ).strip())
- 
+
                     self.server_specific_data[player.voice_client.guild]['auto_paused'] = False
                     player.resume()
 
