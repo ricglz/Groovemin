@@ -1348,6 +1348,7 @@ class MusicBot(discord.Client):
                             continue
                         else:
                             break
+                    random.shuffle(res)
                     await self._do_playlist_checks(permissions, player, author, res)
                     procmesg = await self.safe_send_message(channel, self.str.get('cmd-play-spotify-playlist-process', 'Processing playlist `{0}` (`{1}`)').format(parts[-1], song_url))
                     for i in res:
