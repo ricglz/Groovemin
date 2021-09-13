@@ -48,7 +48,7 @@ class PlayerCog(Cog):
         """
 
         if playlist is None:
-            playlist = Playlist(self)
+            playlist = Playlist(self.bot)
 
         if dir is None:
             dir = 'data/%s/queue.json' % guild.id
@@ -62,7 +62,7 @@ class PlayerCog(Cog):
             with open(dir, 'r', encoding='utf8') as f:
                 data = f.read()
 
-        return MusicPlayer.from_json(data, self, voice_client, playlist)
+        return MusicPlayer.from_json(data, self.bot, voice_client, playlist)
 
     async def get_player(self, channel, create=False, *, deserialize=False) -> MusicPlayer:
         guild = channel.guild
@@ -90,8 +90,8 @@ class PlayerCog(Cog):
 
                 voice_client = await self.get_voice_client(channel)
 
-                playlist = Playlist(self)
-                player = MusicPlayer(self, voice_client, playlist)
+                playlist = Playlist(self.bot)
+                player = MusicPlayer(self.bot, voice_client, playlist)
                 self._init_player(player, guild=guild)
 
         return self.players[guild.id]

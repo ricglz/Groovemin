@@ -123,3 +123,6 @@ class MusicBot(Bot):
             dhandler.setFormatter(
                 logging.Formatter('{asctime}:{levelname}:{name}: {message}', style='{'))
             dlogger.addHandler(dhandler)
+
+    def run(self):
+        super().run(self.config._login_token)

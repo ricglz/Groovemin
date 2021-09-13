@@ -4,11 +4,8 @@ from typing import Optional
 from discord.abc import GuildChannel
 from discord.ext.commands import Cog
 
-from ..bot import MusicBot
-from .messenger import MessengerCog
-
 class CustomCog(Cog):
-    def __init__(self, bot: MusicBot):
+    def __init__(self, bot):
         self.bot = bot
 
     @property
@@ -60,8 +57,8 @@ class CustomCog(Cog):
 
         return not sum(1 for m in v_channel.members if check(m))
 
-    def _get_messenger_cog(self) -> MessengerCog:
-        messenger_cog: Optional[MessengerCog] = self.bot.get_cog('MessengerCog')
+    def _get_messenger_cog(self):
+        messenger_cog = self.bot.get_cog('MessengerCog')
         if messenger_cog is None:
             raise ValueError('MessengerCog is missing')
         return messenger_cog

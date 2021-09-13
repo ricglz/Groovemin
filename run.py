@@ -282,7 +282,7 @@ def req_ensure_encoding():
 
         import io
         sys.stdout = io.TextIOWrapper(sys.stdout.detach(), encoding='utf8', line_buffering=True)
-        # only slightly evil    
+        # only slightly evil
         sys.__stdout__ = sh.stream = sys.stdout
 
         if os.environ.get('PYCHARM_HOSTED', None) not in (None, '0'):
