@@ -18,10 +18,9 @@ from .json import Json
 from .opus_loader import load_opus_lib
 from .permissions import Permissions, PermissionsDefaults
 from .utils import load_file, write_file, fixg, ftimedelta, _func_, _get_variable
+from .cogs import COGS
 
 # from . import exceptions
-# from .playlist import Playlist
-# from .player import MusicPlayer
 # from .entry import StreamPlaylistEntry
 # from .constructs import SkipState, Response
 # from .spotify import Spotify
@@ -75,6 +74,9 @@ class MusicBot(Bot):
         self.aiosession = aiohttp.ClientSession(loop=self.loop)
         self.http.user_agent += ' MusicBot/%s' % BOTVERSION
 
+        for cog_class in COGS:
+            self.add_cog(cog_class(self))
+
     def _setup_logging(self):
         if len(logging.getLogger(__package__).handlers) > 1:
             log.debug("Skipping logger setup, already set up")
@@ -112,7 +114,7 @@ class MusicBot(Bot):
         shandler.setLevel(self.config.debug_level)
         logging.getLogger(__package__).addHandler(shandler)
 
-        log.debug('Set logging level to {}' % self.config.debug_level_str)
+        log.debug('Set logging level to %s', self.config.debug_level_str)
 
         if self.config.debug_mode:
             dlogger = logging.getLogger('discord')
