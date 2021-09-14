@@ -27,13 +27,13 @@ class MusicManager(Cog):
     async def resume(self, context: Context):
         player = await self._get_player(context.channel)
 
-        if player.is_paused:
-            error_msg = self.str.get('cmd-pause-none', 'Player is not playing.')
+        if player.is_playing:
+            error_msg = self.str.get('cmd-resume-none', 'Player is not paused.')
             raise CommandError(error_msg, expire_in=30)
 
-        player.pause()
+        player.resume()
         msg = self.str.get(
             'cmd-pause-reply',
-            'Paused music in `{player.voice_client.channel.name}`'
+            'Resumed music in `{player.voice_client.channel.name}`'
         )
         await self.safe_send_message(context, msg)
