@@ -8,7 +8,8 @@ import discord
 from discord import Member
 from discord.ext.commands import Context, command
 
-from ..exceptions import CommandError, PermissionsError
+from ..exceptions import CommandError, PermissionsError, SpotifyError
+from ..spotify import Spotify
 from ..utils import _func_, fixg, ftimedelta
 from .custom_cog import CustomCog
 
@@ -30,7 +31,40 @@ def parse_song_url(song_query: str):
     song_url = "https://www.youtube.com/playlist?" + groups[0] if len(groups) > 0 else song_url
     return song_url
 
+def parser_song_url_spotify(song_url: str):
+    if 'open.spotify.com' in song_url:
+        regex_result = re.sub(r'(http[s]?:\/\/)?(open.spotify.com)\/', '', song_url)
+        regex_result = regex_result.replace('/', ':')
+        song_url = 'spotify:' + regex_result
+        song_url = re.sub(r'\?.*', '', song_url)
+    return song_url
+
 class PlayCog(CustomCog):
+    def __init__(self, bot):
+        super().__init__(bot)
+        self.spotify = None
+        if self.config._spotify:
+            try:
+                self.spotify = Spotify(
+                    self.config.spotify_clientid,
+                    self.config.spotify_clientsecret,
+                    aiosession=self.bot.aiosession,
+                    loop=self.bot.loop
+                )
+                if not self.spotify.token:
+                    log.warning('Spotify did not provide us with a token. Disabling.')
+                    self.config._spotify = False
+                else:
+                    log.info('Authenticated with Spotify successfully using client ID and secret.')
+            except SpotifyError as e:
+                log.warning(
+                    'There was a problem initializing the connection to Spotify. Is your client '
+                    'ID and secret correct? Details: %s. Continuing anyway in 5 seconds...',
+                    e
+                )
+                self.config._spotify = False
+                time.sleep(5)
+
     async def determine_type(self, player, song_url: str):
         '''Try to determine entry type, if _type is playlist then there should be entries'''
         while True:
@@ -279,16 +313,88 @@ class PlayCog(CustomCog):
         btext = entry.title
         return reply_text, btext, position
 
-    @command()
-    async def play(self, context: Context, *args):
-        song_query = ' '.join(args)
-        song_url = parse_song_url(song_query)
+    async def _handle_spotify(
+        self,
+        song_url: str,
+        context: Context,
+        permissions,
+        player,
+        author,
+        channel,
+    ):
+        parts = song_url.split(":")
+        try:
+            if 'track' in parts:
+                res = await self.spotify.get_track(parts[-1])
+                song_url = res['artists'][0]['name'] + ' ' + res['name']
+                return await self._play(context, song_url)
 
+            if 'album' in parts:
+                res = await self.spotify.get_album(parts[-1])
+                await self._do_playlist_checks(permissions, player, author, res['tracks']['items'])
+                procmsg = self.str.get(
+                    'cmd-play-spotify-album-process',
+                    'Processing album `{res["name"]}` (`{song_url}`)'
+                )
+                procmsg = await self.safe_send_message(channel, procmsg)
+                for i in res['tracks']['items']:
+                    song_url = i['name'] + ' ' + i['artists'][0]['name']
+                    log.debug('Processing %s', song_url)
+                    await self._play(context, song_url)
+                await self.safe_delete_message(procmsg)
+                response_msg = self.str.get(
+                    'cmd-play-spotify-album-queued',
+                    f"Enqueued `{res['name']}` with **{len(res['tracks']['items'])}** songs."
+                )
+
+            elif 'playlist' in parts:
+                r = await self.spotify.get_playlist_tracks(parts[-1])
+                res = r['items']
+                while r['next'] is not None:
+                    r = await self.spotify.make_spotify_req(r['next'])
+                    res.extend(r['items'])
+                await self._do_playlist_checks(permissions, player, author, res)
+                procmsg = self.str.get(
+                    'cmd-play-spotify-playlist-process',
+                    f'Processing playlist `{parts[-1]}` (`{song_url}`)'
+                )
+                procmsg = await self.safe_send_message(channel, procmsg)
+                for i in res:
+                    song_url = i['track']['name'] + ' ' + i['track']['artists'][0]['name']
+                    log.debug('Processing %s', song_url)
+                    await self._play(context, song_url)
+                await self.safe_delete_message(procmsg)
+                response_msg = self.str.get(
+                    'cmd-play-spotify-playlist-queued',
+                    f"Enqueued `{parts[-1]}` with **{len(res)}** songs."
+                )
+
+            else:
+                error_msg = self.str.get(
+                    'cmd-play-spotify-unsupported',
+                    'That is not a supported Spotify URI.'
+                )
+                raise CommandError(error_msg, expire_in=30)
+
+            await self.safe_send_message(channel, response_msg)
+        except SpotifyError as error:
+            error_msg = self.str.get(
+                'cmd-play-spotify-invalid',
+                'You either provided an invalid URI, or there was a problem.'
+            )
+            raise CommandError(error_msg) from error
+
+    async def _play(self, context: Context, song_url: str):
         author: Member = context.author
         channel = context.channel
         permissions = self.permissions.for_user(author)
 
         player = await self.get_player_cog().get_player(author.voice.channel)
+
+        if self.config._spotify:
+            song_url = parser_song_url_spotify(song_url)
+            if song_url.startswith('spotify:'):
+                await self._handle_spotify(song_url, context, permissions, player, author, channel)
 
         async with self.aiolocks[_func_() + ':' + str(author.id)]:
             self._check_for_permissions(permissions, player, author)
@@ -338,6 +444,12 @@ class PlayCog(CustomCog):
                 reply_text %= (btext, position, ftimedelta(time_until))
 
         await self.safe_send_message(context, reply_text, expire_in=30)
+
+    @command()
+    async def play(self, context: Context, *args):
+        song_query = ' '.join(args)
+        song_url = parse_song_url(song_query)
+        await self._play(context, song_url)
 
     async def _do_playlist_checks(self, permissions, player, author, testobj):
         num_songs = sum(1 for _ in testobj)

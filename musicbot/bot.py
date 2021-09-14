@@ -24,7 +24,6 @@ from .cogs import COGS
 # from . import exceptions
 # from .entry import StreamPlaylistEntry
 # from .constructs import SkipState, Response
-# from .spotify import Spotify
 # from .constants import DISCORD_MSG_CHAR_LIMIT, AUDIO_CACHE_PATH
 
 load_opus_lib()
