@@ -14,10 +14,11 @@ from .aliases import Aliases, AliasesDefault
 from .config import Config, ConfigDefaults
 from .constants import VERSION as BOTVERSION
 from .downloader import Downloader
+from .exceptions import MusicbotException
 from .json import Json
 from .opus_loader import load_opus_lib
 from .permissions import Permissions, PermissionsDefaults
-from .utils import load_file, write_file, fixg, ftimedelta, _func_, _get_variable
+from .utils import load_file
 from .cogs import COGS
 
 # from . import exceptions
@@ -133,7 +134,11 @@ class MusicBot(Bot):
             raise ValueError('MessengerCog is missing')
         if isinstance(exception, CommandInvokeError):
             exception = exception.original
-        return await messenger_cog.safe_send_message(context, exception)
+        log.error(exception.__traceback__)
+        expire_in = 0
+        if isinstance(exception, (MusicbotException)):
+            expire_in = exception.expire_in
+        return await messenger_cog.safe_send_message(context, exception, expire_in=expire_in)
 
     def run(self):
         super().run(self.config._login_token)
