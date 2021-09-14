@@ -1,9 +1,12 @@
+from datetime import timedelta
 from typing import Optional
 import logging
 
 from discord.ext.commands import Context, command
 
+from ..constants import DISCORD_MSG_CHAR_LIMIT
 from ..exceptions import CommandError, PermissionsError
+from ..utils import ftimedelta
 from .custom_cog import CustomCog as Cog
 
 log = logging.getLogger(__name__)
@@ -106,3 +109,71 @@ class MusicManager(Cog):
             ).format(entry.title)
         response_msg = response_msg.strip()
         self.safe_send_message(context, response_msg)
+
+    @command
+    async def queue(self, context: Context):
+        player = self._get_player(context.channel)
+        lines = []
+        unlisted = 0
+        andmoretext = '* ... and %s more*' % ('x' * len(player.playlist.entries))
+
+        if player.is_playing:
+            # TODO: Fix timedelta garbage with util function
+            song_progress = ftimedelta(timedelta(seconds=player.progress))
+            song_total = ftimedelta(timedelta(seconds=player.current_entry.duration))
+            prog_str = '`[%s/%s]`' % (song_progress, song_total)
+
+            if player.current_entry.meta.get('channel', False) and \
+               player.current_entry.meta.get('author', False):
+                line = self.str.get(
+                    'cmd-queue-playing-author',
+                    "Currently playing: `{0}` added by `{1}` {2}\n"
+                ).format(
+                    player.current_entry.title,
+                    player.current_entry.meta['author'].nae,
+                    prog_str
+                )
+            else:
+                line = self.str.get(
+                    'cmd-queue-playing-noauthor',
+                    "Currently playing: `{0}` {1}\n"
+                ).format(player.current_entry.title, prog_str)
+            lines.append(line)
+
+        currentlinesum = len(lines[0] + 1)
+        for i, item in enumerate(player.playlist, 1):
+            if item.meta.get('channel', False) and item.meta.get('author', False):
+                nextline = self.str.get(
+                    'cmd-queue-entry-author',
+                    '{0} -- `{1}` by `{2}`'
+                ).format(i, item.title, item.meta['author'].name)
+            else:
+                nextline = self.str.get(
+                    'cmd-queue-entry-noauthor',
+                    '{0} -- `{1}`'
+                ).format(i, item.title)
+            nextline.strip()
+
+            potential_len = currentlinesum + len(nextline) + len(andmoretext)
+            if (potential_len > DISCORD_MSG_CHAR_LIMIT) or \
+               i > self.config.queue_length:
+                if currentlinesum + len(andmoretext):
+                    unlisted += 1
+                    continue
+
+            lines.append(nextline)
+            currentlinesum = len(nextline) + 1
+
+        if unlisted:
+            lines.append(self.str.get('cmd-queue-more', '\n... and %s more') % unlisted)
+
+        if not lines:
+            lines.append(
+                self.str.get(
+                    'cmd-queue-none',
+                    'There are no songs queued! Queue something with {}play.'
+                ).format(self.config.command_prefix)
+            )
+
+        message = '\n'.join(lines)
+        self.safe_send_message(context, message)
