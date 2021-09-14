@@ -389,7 +389,7 @@ class PlayCog(CustomCog):
         channel = context.channel
         permissions = self.permissions.for_user(author)
 
-        player = await self.get_player_cog().get_player(author.voice.channel)
+        player = await self._get_player(author.voice.channel)
 
         if self.config._spotify:
             song_url = parser_song_url_spotify(song_url)

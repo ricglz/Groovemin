@@ -10,10 +10,24 @@ log = logging.getLogger(__name__)
 class MusicManager(Cog):
     @command
     async def pause(self, context: Context):
-        player_cog = self.get_player_cog()
-        player = await player_cog.get_player(context.channel)
+        player = await self._get_player(context.channel)
 
-        if not player.is_playing:
+        if player.is_paused:
+            error_msg = self.str.get('cmd-pause-none', 'Player is not playing.')
+            raise CommandError(error_msg, expire_in=30)
+
+        player.pause()
+        msg = self.str.get(
+            'cmd-pause-reply',
+            'Paused music in `{player.voice_client.channel.name}`'
+        )
+        await self.safe_send_message(context, msg)
+
+    @command
+    async def resume(self, context: Context):
+        player = await self._get_player(context.channel)
+
+        if player.is_paused:
             error_msg = self.str.get('cmd-pause-none', 'Player is not playing.')
             raise CommandError(error_msg, expire_in=30)
 

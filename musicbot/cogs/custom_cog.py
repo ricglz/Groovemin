@@ -76,3 +76,6 @@ class CustomCog(Cog):
         if player_cog is None:
             raise ValueError('PlayerCog is missing')
         return player_cog
+
+    async def _get_player(self, channel):
+        return await self.get_player_cog().get_player(channel)
