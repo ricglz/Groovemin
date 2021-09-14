@@ -3,6 +3,7 @@ from collections import defaultdict
 import asyncio
 import logging
 import sys
+import traceback
 
 import aiohttp
 import colorlog
@@ -14,7 +15,7 @@ from .aliases import Aliases, AliasesDefault
 from .config import Config, ConfigDefaults
 from .constants import VERSION as BOTVERSION
 from .downloader import Downloader
-from .exceptions import MusicbotException
+from .exceptions import MusicbotException, TerminateSignal
 from .json import Json
 from .opus_loader import load_opus_lib
 from .permissions import Permissions, PermissionsDefaults
@@ -133,7 +134,14 @@ class MusicBot(Bot):
             raise ValueError('MessengerCog is missing')
         if isinstance(exception, CommandInvokeError):
             exception = exception.original
-        log.error(exception.__traceback__)
+        if isinstance(exception, TerminateSignal):
+            raise TerminateSignal('Bye bye')
+        traceback.print_exception(
+            type(exception),
+            exception,
+            exception.__traceback__,
+            file=sys.stderr,
+        )
         expire_in = 0
         if isinstance(exception, (MusicbotException)):
             expire_in = exception.expire_in

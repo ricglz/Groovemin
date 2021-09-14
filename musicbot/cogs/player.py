@@ -387,3 +387,7 @@ class PlayerCog(Cog):
             )
         else:
             log.exception("Player error", exc_info=ex)
+
+    def remove_player(self, guild):
+        if guild.id in self.players:
+            self.players.pop(guild.id).kill()

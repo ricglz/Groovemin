@@ -5,11 +5,11 @@ from .custom_cog import CustomCog as Cog
 from .messenger import MessengerCog
 from .play import PlayCog
 from .player import PlayerCog
-from .summon import SummonCog
+from .connection_manager import ConnectionManagerCog
 
 COGS: List[Cog] = [
+    ConnectionManagerCog,
     MessengerCog,
     PlayCog,
     PlayerCog,
-    SummonCog
 ]
