@@ -4,6 +4,8 @@ from typing import Optional
 from discord.abc import GuildChannel
 from discord.ext.commands import Cog
 
+from ..player import MusicPlayer
+
 class CustomCog(Cog):
     def __init__(self, bot):
         self.bot = bot
@@ -77,5 +79,5 @@ class CustomCog(Cog):
             raise ValueError('PlayerCog is missing')
         return player_cog
 
-    async def _get_player(self, channel):
+    async def _get_player(self, channel) -> MusicPlayer:
         return await self.get_player_cog().get_player(channel)
