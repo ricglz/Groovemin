@@ -1,4 +1,4 @@
-from os import path
+from os import path, makedirs
 import logging
 import random
 import time
@@ -142,7 +142,7 @@ class PlayerCog(Cog):
     def get_player_in(self, guild: Guild) -> MusicPlayer:
         return self.players.get(guild.id)
 
-    async def serialize_queue(self, guild, *, dir=None):
+    async def serialize_queue(self, guild):
         """
         Serialize the current queue for a server's player to json.
         """
@@ -151,14 +151,16 @@ class PlayerCog(Cog):
         if not player:
             return
 
-        if dir is None:
-            dir = 'data/%s/queue.json' % guild.id
+        directory = path.join('data', str(guild.id))
+        makedirs(directory, exist_ok=True)
+
+        filepath = path.join(directory, 'queue.json')
 
         async with self.aiolocks['queue_serialization' + ':' + str(guild.id)]:
             log.debug("Serializing queue for %s", guild.id)
 
-            with open(dir, 'w', encoding='utf8') as f:
-                f.write(player.serialize(sort_keys=True))
+            with open(filepath, 'w', encoding='utf8') as file:
+                file.write(player.serialize(sort_keys=True))
 
     async def write_current_song(self, guild, entry, *, directory=None):
         """
@@ -249,7 +251,6 @@ class PlayerCog(Cog):
     async def on_player_pause(self, player, entry, **_):
         log.debug('Running on_player_pause')
         await self.update_now_playing_status(entry, True)
-        # await self.serialize_queue(player.voice_client.channel.guild)
 
     async def on_player_stop(self, player, **_):
         log.debug('Running on_player_stop')
