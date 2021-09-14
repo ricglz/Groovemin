@@ -8,7 +8,7 @@ import aiohttp
 import colorlog
 
 from discord import Intents
-from discord.ext.commands import Bot
+from discord.ext.commands import Bot, CommandError, CommandInvokeError, Context
 
 from .aliases import Aliases, AliasesDefault
 from .config import Config, ConfigDefaults
@@ -47,7 +47,10 @@ class MusicBot(Bot):
 
         self.config = Config(config_file)
 
-        super().__init__(command_prefix=self.config.command_prefix, intents=Intents.default())
+        super().__init__(
+            command_prefix=self.config.command_prefix,
+            intents=Intents.default()
+        )
 
         self._setup_logging()
 
@@ -123,6 +126,14 @@ class MusicBot(Bot):
             dhandler.setFormatter(
                 logging.Formatter('{asctime}:{levelname}:{name}: {message}', style='{'))
             dlogger.addHandler(dhandler)
+
+    async def on_command_error(self, context: Context, exception: CommandError):
+        messenger_cog = self.get_cog('MessengerCog')
+        if messenger_cog is None:
+            raise ValueError('MessengerCog is missing')
+        if isinstance(exception, CommandInvokeError):
+            exception = exception.original
+        return await messenger_cog.safe_send_message(context, exception)
 
     def run(self):
         super().run(self.config._login_token)

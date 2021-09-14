@@ -1,7 +1,8 @@
-pynacl>=1.2.1
+cffi --only-binary all; sys_platform == 'win32'
+colorlog
+discord-py-interactions
 discord.py[voice]>=1.2.5
 pip
-youtube_dl
-colorlog
+pynacl>=1.2.1
 websockets
-cffi --only-binary all; sys_platform == 'win32'
+youtube_dl

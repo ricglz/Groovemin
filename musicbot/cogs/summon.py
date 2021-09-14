@@ -1,7 +1,7 @@
 from typing import Optional
 import logging
 
-from discord import Member, Guild
+from discord import Guild, Member
 from discord.ext.commands import Context, command
 
 from ..constructs import Response
@@ -23,7 +23,7 @@ class SummonCog(Cog):
         author: Member = context.author
 
         if not author.voice:
-            raise ValueError()
+            raise CommandError(self.str.get('cmd-summon-novc', 'You are not connected to voice. Try joining a voice channel!'))
 
         guild: Guild = context.guild
         voice_client = self._voice_client_in(guild)
