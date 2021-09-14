@@ -30,7 +30,7 @@ def parse_song_url(song_query: str):
     song_url = "https://www.youtube.com/playlist?" + groups[0] if len(groups) > 0 else song_url
     return song_url
 
-class MusicManagerCog(CustomCog):
+class PlayCog(CustomCog):
     async def determine_type(self, player, song_url: str):
         '''Try to determine entry type, if _type is playlist then there should be entries'''
         while True:
