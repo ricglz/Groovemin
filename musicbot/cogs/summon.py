@@ -1,13 +1,10 @@
-from typing import Optional
 import logging
 
 from discord import Guild, Member
 from discord.ext.commands import Context, command
 
-from ..constructs import Response
 from ..exceptions import CommandError
 from .custom_cog import CustomCog as Cog
-from .player import PlayerCog
 
 log = logging.getLogger(__name__)
 
@@ -51,8 +48,6 @@ class SummonCog(Cog):
             await self._initialize_player(author)
 
         log.info("Joining {0.guild.name}/{0.name}".format(author.voice.channel))
-
-        return Response(self.str.get('cmd-summon-reply', 'Connected to `{0.name}`').format(author.voice.channel))
 
     async def _initialize_player(self, author: Member):
         player_cog = self.get_player_cog()
