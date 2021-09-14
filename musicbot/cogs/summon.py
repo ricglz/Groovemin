@@ -55,10 +55,7 @@ class SummonCog(Cog):
         return Response(self.str.get('cmd-summon-reply', 'Connected to `{0.name}`').format(author.voice.channel))
 
     async def _initialize_player(self, author: Member):
-        player_cog: Optional[PlayerCog] = self.bot.get_cog('PlayerCog')
-        if player_cog is None:
-            raise ValueError('PlayerCog is missing')
-
+        player_cog = self.get_player_cog()
         player = await player_cog.get_player(author.voice.channel, create=True, deserialize=self.config.persistent_queue)
 
         if player.is_stopped:

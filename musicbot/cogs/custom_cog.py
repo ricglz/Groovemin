@@ -70,3 +70,9 @@ class CustomCog(Cog):
     async def safe_delete_message(self, message, *, quiet=False):
         messenger_cog = self._get_messenger_cog()
         return await messenger_cog.safe_delete_message(message, quiet=quiet)
+
+    def get_player_cog(self):
+        player_cog = self.bot.get_cog('PlayerCog')
+        if player_cog is None:
+            raise ValueError('PlayerCog is missing')
+        return player_cog

@@ -416,7 +416,7 @@ def main():
                 log.exception("Error starting bot")
 
         finally:
-            if not m or not m.init_ok:
+            if not m:
                 if any(sys.exc_info()):
                     # How to log this without redundant messages...
                     traceback.print_exc()
