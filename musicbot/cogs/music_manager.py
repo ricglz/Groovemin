@@ -37,3 +37,22 @@ class MusicManager(Cog):
             'Resumed music in `{player.voice_client.channel.name}`'
         )
         await self.safe_send_message(context, msg)
+
+    @command
+    async def shuffle(self, context: Context):
+        player = await self._get_player(context.channel)
+        player.playlist.shuffle()
+        msg = self.str.get(
+            'cmd-shuffle-reply',
+            "Shuffled `{player.voice_client.channel.guild}`'s queue."
+        )
+        await self.safe_send_message(context, msg)
+
+    @command
+    async def clear(self, context: Context):
+        player = await self._get_player(context.channel)
+        player.playlist.clear()
+        msg = self.str.get(
+            'cmd-clear-reply',
+            "Cleared `{player.voice_client.channel.guild}`'s queue"
+        )
