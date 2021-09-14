@@ -8,7 +8,6 @@ import discord
 from discord import Member
 from discord.ext.commands import Context, command
 
-from ..constructs import Response
 from ..exceptions import CommandError, PermissionsError
 from ..utils import _func_, fixg, ftimedelta
 from .custom_cog import CustomCog
@@ -89,7 +88,7 @@ class MusicManagerCog(CustomCog):
                 else:
                     raise CommandError(e, expire_in=30) from e
 
-            return info, song_url
+        return info, song_url
 
     def _check_for_permissions(self, permissions, player, author):
         if permissions.max_songs and \
@@ -131,7 +130,7 @@ class MusicManagerCog(CustomCog):
             player.playlist.loop,
             song_url,
             download=False,
-            process=True,    # ASYNC LAMBDAS WHEN
+            process=True,
             on_error=lambda e: asyncio.ensure_future(
                 self.safe_send_message(channel, "```\n%s\n```" % e, expire_in=120), loop=self.bot.loop),
             retry_on_error=True
@@ -160,11 +159,11 @@ class MusicManagerCog(CustomCog):
 
     async def _send_playlist_gathering_msg(self, num_songs: int, wait_per_song: float, channel):
         eta = fixg(num_songs * wait_per_song)
-        eta_msg = self.str.get('cmd-play-playlist-gathering-2', ', ETA: {eta} seconds') \
+        eta_msg = self.str.get('cmd-play-playlist-gathering-2', f', ETA: {eta} seconds') \
                   if num_songs >= 10 else '.'
         safe_msg = self.str.get(
             'cmd-play-playlist-gathering-1',
-            'Gathering playlist information for {num_songs} songs{eta_msg}')
+            f'Gathering playlist information for {num_songs} songs{eta_msg}')
         return await self.safe_send_message(channel, safe_msg)
 
     async def _handle_entries(self, permissions, player, author, info, channel, song_url):
@@ -338,7 +337,7 @@ class MusicManagerCog(CustomCog):
 
                 reply_text %= (btext, position, ftimedelta(time_until))
 
-        await self.safe_send_message(context, Response(reply_text, delete_after=30))
+        await self.safe_send_message(context, reply_text, expire_in=30)
 
     async def _do_playlist_checks(self, permissions, player, author, testobj):
         num_songs = sum(1 for _ in testobj)
