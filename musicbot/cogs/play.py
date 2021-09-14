@@ -394,7 +394,14 @@ class PlayCog(CustomCog):
         if self.config._spotify:
             song_url = parser_song_url_spotify(song_url)
             if song_url.startswith('spotify:'):
-                await self._handle_spotify(song_url, context, permissions, player, author, channel)
+                return await self._handle_spotify(
+                    song_url,
+                    context,
+                    permissions,
+                    player,
+                    author,
+                    channel
+                )
 
         async with self.aiolocks[_func_() + ':' + str(author.id)]:
             self._check_for_permissions(permissions, player, author)
