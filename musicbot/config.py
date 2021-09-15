@@ -46,6 +46,7 @@ class Config:
 
         self.command_prefix = config.get('Chat', 'CommandPrefix', fallback=ConfigDefaults.command_prefix)
         self.bound_channels = config.get('Chat', 'BindToChannels', fallback=ConfigDefaults.bound_channels)
+        self.servers = config.get('Chat', 'Servers', fallback=ConfigDefaults.servers)
         self.unbound_servers = config.getboolean('Chat', 'AllowUnboundServers', fallback=ConfigDefaults.unbound_servers)
         self.autojoin_channels =  config.get('Chat', 'AutojoinChannels', fallback=ConfigDefaults.autojoin_channels)
         self.dm_nowplaying = config.getboolean('Chat', 'DMNowPlaying', fallback=ConfigDefaults.dm_nowplaying)
@@ -183,6 +184,13 @@ class Config:
             except:
                 log.warning("BindToChannels data is invalid, will not bind to any channels")
                 self.bound_channels = set()
+
+        if self.servers:
+            try:
+                self.servers = set(int(x) for x in self.servers.replace(',', ' ').split() if x)
+            except:
+                log.warning("Servers data is invalid, will not bind to any channels")
+                self.servers = set()
 
         if self.autojoin_channels:
             try:
@@ -333,6 +341,7 @@ class ConfigDefaults:
 
     command_prefix = '!'
     bound_channels = set()
+    servers = set()
     unbound_servers = False
     autojoin_channels = set()
     dm_nowplaying = False

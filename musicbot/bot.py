@@ -10,6 +10,7 @@ import colorlog
 
 from discord import Intents
 from discord.ext.commands import Bot, CommandError, CommandInvokeError, Context
+from dislash import InteractionClient
 
 from .aliases import Aliases, AliasesDefault
 from .config import Config, ConfigDefaults
@@ -75,6 +76,8 @@ class MusicBot(Bot):
 
         for cog_class in COGS:
             self.add_cog(cog_class(self))
+
+        InteractionClient(self, test_guilds=list(self.config.servers))
 
     def _setup_logging(self):
         if len(logging.getLogger(__package__).handlers) > 1:

@@ -2,6 +2,7 @@ import logging
 
 from discord import Guild, Member
 from discord.ext.commands import Context, command
+from dislash import slash_command
 
 from ..exceptions import CommandError
 from .custom_cog import CustomCog as Cog
@@ -15,7 +16,7 @@ class ConnectionManagerCog(Cog):
                 return voice_client
         return None
 
-    @command()
+    @slash_command()
     async def summon(self, context: Context):
         author: Member = context.author
 
