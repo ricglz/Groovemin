@@ -53,10 +53,10 @@ class PlayerCog(Cog):
         if dir is None:
             dir = 'data/%s/queue.json' % guild.id
 
-        async with self.aiolocks['queue_serialization' + ':' + str(guild.id)]:
-            if not path.isfile(dir):
-                return None
+        if not path.isfile(dir):
+            return None
 
+        async with self.aiolocks['queue_serialization' + ':' + str(guild.id)]:
             log.debug("Deserializing queue for %s", guild.id)
 
             with open(dir, 'r', encoding='utf8') as f:
@@ -66,6 +66,9 @@ class PlayerCog(Cog):
 
     async def get_player(self, channel, create=False, *, deserialize=False) -> MusicPlayer:
         guild = channel.guild
+
+        if guild.id in self.players:
+            return self.players[guild.id]
 
         async with self.aiolocks[_func_() + ':' + str(guild.id)]:
             if deserialize:
@@ -82,19 +85,16 @@ class PlayerCog(Cog):
                     # I should never need to reconnect
                     return self._init_player(player, guild=guild)
 
-            if guild.id not in self.players:
-                if not create:
-                    raise CommandError(
-                        'The bot is not in a voice channel.  '
-                        'Use %ssummon to summon it to your voice channel.' % self.config.command_prefix)
+            if not create:
+                raise CommandError(
+                    'The bot is not in a voice channel.  '
+                    'Use %ssummon to summon it to your voice channel.' % self.config.command_prefix)
 
-                voice_client = await self.get_voice_client(channel)
+            voice_client = await self.get_voice_client(channel)
 
-                playlist = Playlist(self.bot)
-                player = MusicPlayer(self.bot, voice_client, playlist)
-                self._init_player(player, guild=guild)
-
-        return self.players[guild.id]
+            playlist = Playlist(self.bot)
+            player = MusicPlayer(self.bot, voice_client, playlist)
+            self._init_player(player, guild=guild)
 
     def _init_player(self, player, *, guild=None):
         player = player.on('play', self.on_player_play) \
