@@ -389,6 +389,13 @@ class PlayCog(CustomCog):
         channel = context.channel
         permissions = self.permissions.for_user(author)
 
+        if author.voice is None:
+            error_msg = self.str.get(
+                'cmd-summon-novc',
+                'You are not connected to voice. Try joining a voice channel!'
+            )
+            raise CommandError(error_msg)
+
         player = await self._get_player(author.voice.channel)
 
         if self.config._spotify:

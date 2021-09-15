@@ -93,4 +93,3 @@ class ConnectionManagerCog(Cog):
             player.resume()
 
         await self.disconnect_all_voice_clients(player_cog)
-        raise TerminateSignal()

@@ -59,11 +59,14 @@ class CustomCog(Cog):
 
         return not sum(1 for m in v_channel.members if check(m))
 
+    def _get_cog(self, cog_name: str):
+        cog = self.bot.get_cog(cog_name)
+        if cog is None:
+            raise ValueError(f'{cog_name} is missing')
+        return cog
+
     def _get_messenger_cog(self):
-        messenger_cog = self.bot.get_cog('MessengerCog')
-        if messenger_cog is None:
-            raise ValueError('MessengerCog is missing')
-        return messenger_cog
+        return self._get_cog('MessengerCog')
 
     async def safe_send_message(self, dest, content, **kwargs):
         messenger_cog = self._get_messenger_cog()
@@ -74,10 +77,7 @@ class CustomCog(Cog):
         return await messenger_cog.safe_delete_message(message, quiet=quiet)
 
     def get_player_cog(self):
-        player_cog = self.bot.get_cog('PlayerCog')
-        if player_cog is None:
-            raise ValueError('PlayerCog is missing')
-        return player_cog
+        return self._get_cog('PlayerCog')
 
     async def _get_player(self, channel) -> MusicPlayer:
         return await self.get_player_cog().get_player(channel)
