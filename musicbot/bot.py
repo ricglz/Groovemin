@@ -34,17 +34,12 @@ log = logging.getLogger(__name__)
 class MusicBot(Bot):
     '''Main class for the music bot'''
 
-    def __init__(self, config_file=None, perms_file=None, aliases_file=None):
+    def __init__(self):
         sys.stdout.write("\x1b]2;MusicBot {}\x07\n".format(BOTVERSION))
 
-        if config_file is None:
-            config_file = ConfigDefaults.options_file
-
-        if perms_file is None:
-            perms_file = PermissionsDefaults.perms_file
-
-        if aliases_file is None:
-            aliases_file = AliasesDefault.aliases_file
+        config_file = ConfigDefaults.options_file
+        perms_file = PermissionsDefaults.perms_file
+        aliases_file = AliasesDefault.aliases_file
 
         self.config = Config(config_file)
 
