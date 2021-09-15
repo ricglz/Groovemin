@@ -1,3 +1,6 @@
+from dataclasses import dataclass
+from random import shuffle
+from typing import Optional
 import asyncio
 import logging
 import re
@@ -10,6 +13,8 @@ from discord.ext.commands import Context
 from dislash import command, Option, OptionType
 
 from ..exceptions import CommandError, PermissionsError, SpotifyError
+from ..permissions import Permissions
+from ..player import MusicPlayer
 from ..spotify import Spotify
 from ..utils import _func_, fixg, ftimedelta
 from .custom_cog import CustomCog
@@ -39,6 +44,15 @@ def parser_song_url_spotify(song_url: str):
         song_url = 'spotify:' + regex_result
         song_url = re.sub(r'\?.*', '', song_url)
     return song_url
+
+@dataclass
+class PlayRequirements:
+    author: Member
+    channel: object
+    permissions: Permissions
+    player: MusicPlayer
+    shuffle: bool
+    song_url: str
 
 class PlayCog(CustomCog):
     def __init__(self, bot):
@@ -201,7 +215,12 @@ class PlayCog(CustomCog):
             f'Gathering playlist information for {num_songs} songs{eta_msg}')
         return await self.safe_send_message(channel, safe_msg)
 
-    async def _handle_entries(self, permissions, player, author, info, channel, song_url):
+    async def _handle_entries(self, play_req: PlayRequirements, info):
+        author = play_req.author
+        channel = play_req.channel
+        permissions = play_req.permissions
+        player = play_req.player
+
         await self._do_playlist_checks(permissions, player, author, info['entries'])
 
         num_songs = sum(1 for _ in info['entries'])
@@ -213,7 +232,7 @@ class PlayCog(CustomCog):
                     channel,
                     author,
                     permissions,
-                    song_url,
+                    play_req.song_url,
                     info['extractor']
                 )
             except CommandError:
@@ -246,7 +265,7 @@ class PlayCog(CustomCog):
         # a "verify_entry" hook with the entry as an arg and returns
         # the entry if its ok
         entry_list, position = await player.playlist.import_from(
-            song_url,
+            play_req.song_url,
             channel=channel,
             author=author
         )
@@ -289,7 +308,12 @@ class PlayCog(CustomCog):
 
         return reply_text, btext, position
 
-    async def _handle_entry(self, permissions, player, author, info, channel, song_url):
+    async def _handle_entry(self, play_req: PlayRequirements, info):
+        author = play_req.author
+        channel = play_req.channel
+        permissions = play_req.permissions
+        player = play_req.player
+
         # youtube:playlist extractor but it's actually an entry
         if info.get('extractor', '').startswith('youtube:playlist'):
             try:
@@ -308,67 +332,95 @@ class PlayCog(CustomCog):
                 f"Song duration exceeds limit ({info['duration']} > {permissions.max_song_length})")
             raise PermissionsError(error_msg, expire_in=30)
 
-        entry, position = await player.playlist.add_entry(song_url, channel=channel, author=author)
+        entry, position = await player.playlist.add_entry(play_req.song_url, channel=channel, author=author)
 
         reply_text = self.str.get('cmd-play-song-reply', "Enqueued `%s` to be played. Position in queue: %s")
         btext = entry.title
         return reply_text, btext, position
 
-    async def _handle_spotify(
-        self,
-        song_url: str,
-        context: Context,
-        permissions,
-        player,
-        author,
-        channel,
+    async def _handle_spotify_track(
+        self, play_req: PlayRequirements, context: Context, parts: list
     ):
-        parts = song_url.split(":")
+        res = await self.spotify.get_track(parts[-1])
+        song_url = res['artists'][0]['name'] + ' ' + res['name']
+        await self._play(context, song_url)
+
+    async def _handle_spotify_album(
+        self, play_req: PlayRequirements, context: Context, parts: list
+    ):
+        author = play_req.author
+        channel = play_req.channel
+        permissions = play_req.permissions
+        player = play_req.player
+
+        res = await self.spotify.get_album(parts[-1])
+
+        await self._do_playlist_checks(permissions, player, author, res['tracks']['items'])
+        procmsg = self.str.get(
+            'cmd-play-spotify-album-process',
+            'Processing album `{res["name"]}` (`{play_req.song_url}`)'
+        )
+        procmsg = await self.safe_send_message(channel, procmsg)
+
+        items = res['tracks']['items']
+        if play_req.shuffle:
+            shuffle(items)
+
+        for i in items:
+            song_url = i['name'] + ' ' + i['artists'][0]['name']
+            log.debug('Processing %s', song_url)
+            await self._play(context, song_url)
+        await self.safe_delete_message(procmsg)
+
+        return self.str.get(
+            'cmd-play-spotify-album-queued',
+            f"Enqueued `{res['name']}` with **{len(res['tracks']['items'])}** songs."
+        )
+
+    async def _handle_spotify_playlist(
+        self, play_req: PlayRequirements, context: Context, parts: list
+    ):
+        author = play_req.author
+        channel = play_req.channel
+        permissions = play_req.permissions
+        player = play_req.player
+
+        r = await self.spotify.get_playlist_tracks(parts[-1])
+        res = r['items']
+        while r['next'] is not None:
+            r = await self.spotify.make_spotify_req(r['next'])
+            res.extend(r['items'])
+        await self._do_playlist_checks(permissions, player, author, res)
+        procmsg = self.str.get(
+            'cmd-play-spotify-playlist-process',
+            f'Processing playlist `{parts[-1]}` (`{play_req.song_url}`)'
+        )
+        procmsg = await self.safe_send_message(channel, procmsg)
+
+        if play_req.shuffle:
+            shuffle(res)
+
+        for i in res:
+            song_url = i['track']['name'] + ' ' + i['track']['artists'][0]['name']
+            log.debug('Processing %s', song_url)
+            await self._play(context, song_url)
+        await self.safe_delete_message(procmsg)
+        return self.str.get(
+            'cmd-play-spotify-playlist-queued',
+            f"Enqueued `{parts[-1]}` with **{len(res)}** songs."
+        )
+
+    async def _handle_spotify(self, play_req: PlayRequirements, context: Context):
+        parts = play_req.song_url.split(":")
         try:
             if 'track' in parts:
-                res = await self.spotify.get_track(parts[-1])
-                song_url = res['artists'][0]['name'] + ' ' + res['name']
-                return await self._play(context, song_url)
+                return await self._handle_spotify_track(play_req, context, parts)
 
             if 'album' in parts:
-                res = await self.spotify.get_album(parts[-1])
-                await self._do_playlist_checks(permissions, player, author, res['tracks']['items'])
-                procmsg = self.str.get(
-                    'cmd-play-spotify-album-process',
-                    'Processing album `{res["name"]}` (`{song_url}`)'
-                )
-                procmsg = await self.safe_send_message(channel, procmsg)
-                for i in res['tracks']['items']:
-                    song_url = i['name'] + ' ' + i['artists'][0]['name']
-                    log.debug('Processing %s', song_url)
-                    await self._play(context, song_url)
-                await self.safe_delete_message(procmsg)
-                response_msg = self.str.get(
-                    'cmd-play-spotify-album-queued',
-                    f"Enqueued `{res['name']}` with **{len(res['tracks']['items'])}** songs."
-                )
+                response_msg = await self._handle_spotify_album(play_req, context, parts)
 
             elif 'playlist' in parts:
-                r = await self.spotify.get_playlist_tracks(parts[-1])
-                res = r['items']
-                while r['next'] is not None:
-                    r = await self.spotify.make_spotify_req(r['next'])
-                    res.extend(r['items'])
-                await self._do_playlist_checks(permissions, player, author, res)
-                procmsg = self.str.get(
-                    'cmd-play-spotify-playlist-process',
-                    f'Processing playlist `{parts[-1]}` (`{song_url}`)'
-                )
-                procmsg = await self.safe_send_message(channel, procmsg)
-                for i in res:
-                    song_url = i['track']['name'] + ' ' + i['track']['artists'][0]['name']
-                    log.debug('Processing %s', song_url)
-                    await self._play(context, song_url)
-                await self.safe_delete_message(procmsg)
-                response_msg = self.str.get(
-                    'cmd-play-spotify-playlist-queued',
-                    f"Enqueued `{parts[-1]}` with **{len(res)}** songs."
-                )
+                response_msg = await self._handle_spotify_playlist(play_req, context, parts)
 
             else:
                 error_msg = self.str.get(
@@ -377,7 +429,7 @@ class PlayCog(CustomCog):
                 )
                 raise CommandError(error_msg, expire_in=30)
 
-            await self.safe_send_message(channel, response_msg)
+            await self.safe_send_message(play_req.channel, response_msg)
         except SpotifyError as error:
             error_msg = self.str.get(
                 'cmd-play-spotify-invalid',
@@ -385,7 +437,7 @@ class PlayCog(CustomCog):
             )
             raise CommandError(error_msg) from error
 
-    async def _play(self, context: Context, song_url: str):
+    async def _play(self, context: Context, song_url: str, shuffle: bool = False):
         author: Member = context.author
         channel = context.channel
         permissions = self.permissions.for_user(author)
@@ -399,17 +451,13 @@ class PlayCog(CustomCog):
 
         player = await self._get_player(author.voice.channel)
 
+        play_requirements = PlayRequirements(
+            author, channel, permissions, player, shuffle, song_url,
+        )
         if self.config._spotify:
             song_url = parser_song_url_spotify(song_url)
             if song_url.startswith('spotify:'):
-                return await self._handle_spotify(
-                    song_url,
-                    context,
-                    permissions,
-                    player,
-                    author,
-                    channel
-                )
+                return await self._handle_spotify(play_requirements, context)
 
         async with self.aiolocks[_func_() + ':' + str(author.id)]:
             self._check_for_permissions(permissions, player, author)
@@ -424,22 +472,14 @@ class PlayCog(CustomCog):
 
             if 'entries' in info:
                 reply_text, btext, position = await self._handle_entries(
-                    permissions,
-                    player,
-                    author,
+                    play_requirements,
                     info,
-                    channel,
-                    song_url
                 )
 
             else:
                 reply_text, btext, position = await self._handle_entry(
-                    permissions,
-                    player,
-                    author,
+                    play_requirements,
                     info,
-                    channel,
-                    song_url
                 )
 
         if btext is not None:
@@ -468,12 +508,17 @@ class PlayCog(CustomCog):
                 'Words query or spotify/youtube url for a song, album or playlist',
                 OptionType.STRING,
                 required=True,
+            ),
+            Option(
+                'shuffle',
+                'If the query is the url of a playlist, then shuffle the playlist order prior to adding',
+                OptionType.BOOLEAN,
             )
         ]
     )
-    async def play(self, context: Context, query: str):
+    async def play(self, context: Context, query: str, shuffle: Optional[bool] = False):
         song_url = parse_song_url(query)
-        await self._play(context, song_url)
+        await self._play(context, song_url, shuffle)
 
     async def _do_playlist_checks(self, permissions, player, author, testobj):
         num_songs = sum(1 for _ in testobj)
