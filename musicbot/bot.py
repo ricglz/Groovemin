@@ -132,17 +132,16 @@ class MusicBot(Bot):
             raise ValueError('MessengerCog is missing')
         if isinstance(exception, CommandInvokeError):
             exception = exception.original
-        if isinstance(exception, TerminateSignal):
-            raise TerminateSignal('Bye bye')
-        traceback.print_exception(
-            type(exception),
-            exception,
-            exception.__traceback__,
-            file=sys.stderr,
-        )
         expire_in = 0
         if isinstance(exception, (MusicbotException)):
             expire_in = exception.expire_in
+        else:
+            traceback.print_exception(
+                type(exception),
+                exception,
+                exception.__traceback__,
+                file=sys.stderr,
+            )
         return await messenger_cog.safe_send_message(context, exception, expire_in=expire_in)
 
     def run(self):
