@@ -22,9 +22,9 @@ class MessengerCog(CustomCog):
         try:
             if content is not None or allow_none:
                 if isinstance(content, discord.Embed):
-                    msg = await dest.send(embed=content)
+                    msg = await dest.reply(embed=content)
                 else:
-                    msg = await dest.send(content, tts=tts)
+                    msg = await dest.reply(content, tts=tts)
 
         except discord.Forbidden:
             log_func("Cannot send message to \"%s\", no permission", dest.name)
