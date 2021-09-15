@@ -14,14 +14,14 @@ class SpecialPlayCog(Cog):
         playlist = self.config.weeb_playlist
         if playlist is None or playlist == '':
             raise CommandError('There is no weeb playlist stored')
-        await self._get_cog('PlayCog')._play(context, playlist)
+        await self._get_cog('PlayCog')._play(context, playlist, shuffle=True)
 
     @command(description='Plays normie playlist')
     async def play_normie(self, context: Context):
         playlist = self.config.normie_playlist
         if playlist is None or playlist == '':
             raise CommandError('There is no normie playlist stored')
-        await self._get_cog('PlayCog')._play(context, playlist)
+        await self._get_cog('PlayCog')._play(context, playlist, shuffle=True)
 
     @command(description='Plays both, normie and weeb, playlists')
     async def play_all(self, context: Context):
