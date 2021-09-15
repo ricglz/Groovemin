@@ -1,14 +1,16 @@
 '''Custom Cog module'''
+from dataclasses import dataclass
 from typing import Optional
 
 from discord.abc import GuildChannel
-from discord.ext.commands import Cog
+from discord.ext.commands import Bot, Cog
 
+from ..config import Config
 from ..player import MusicPlayer
 
+@dataclass
 class CustomCog(Cog):
-    def __init__(self, bot):
-        self.bot = bot
+    bot: Bot
 
     @property
     def voice_clients(self):
@@ -20,7 +22,7 @@ class CustomCog(Cog):
         return self.bot.str
 
     @property
-    def config(self):
+    def config(self) -> Config:
         return self.bot.config
 
     @property

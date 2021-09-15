@@ -1,6 +1,5 @@
 import logging
 
-from discord import Guild
 from discord.ext.commands import Context
 from dislash import command
 
@@ -12,14 +11,14 @@ log = logging.getLogger(__name__)
 class SpecialPlayCog(Cog):
     @command(description='Plays weeb playlist')
     async def play_weeb(self, context: Context):
-        playlist = ''
+        playlist = self.config.weeb_playlist
         if playlist is None or playlist == '':
             raise CommandError('There is no weeb playlist stored')
         await self._get_cog('PlayCog')._play(context, playlist)
 
     @command(description='Plays normie playlist')
     async def play_normie(self, context: Context):
-        playlist = ''
+        playlist = self.config.normie_playlist
         if playlist is None or playlist == '':
             raise CommandError('There is no normie playlist stored')
         await self._get_cog('PlayCog')._play(context, playlist)

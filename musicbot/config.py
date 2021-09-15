@@ -40,6 +40,9 @@ class Config:
         self.spotify_clientid = config.get('Credentials', 'Spotify_ClientID', fallback=ConfigDefaults.spotify_clientid)
         self.spotify_clientsecret = config.get('Credentials', 'Spotify_ClientSecret', fallback=ConfigDefaults.spotify_clientsecret)
 
+        self.normie_playlist = config.get('Credentials', 'NormiePlaylist', fallback=ConfigDefaults.normie_playlist)
+        self.weeb_playlist = config.get('Credentials', 'WeebPlaylist', fallback=ConfigDefaults.weeb_playlist)
+
         self.owner_id = config.get('Permissions', 'OwnerID', fallback=ConfigDefaults.owner_id)
         self.dev_ids = config.get('Permissions', 'DevIDs', fallback=ConfigDefaults.dev_ids)
         self.bot_exception_ids = config.get("Permissions", "BotExceptionIDs", fallback=ConfigDefaults.bot_exception_ids)
@@ -338,6 +341,9 @@ class ConfigDefaults:
 
     spotify_clientid = None
     spotify_clientsecret = None
+
+    normie_playlist = None
+    weeb_playlist = None
 
     command_prefix = '!'
     bound_channels = set()
