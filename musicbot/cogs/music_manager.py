@@ -24,9 +24,8 @@ class MusicManagerCog(Cog):
 
         player.pause()
         msg = self.str.get(
-            'cmd-pause-reply',
-            'Paused music in `{player.voice_client.channel.name}`'
-        )
+            'cmd-pause-reply', 'Paused music in `{0.name}`'
+        ).format(player.voice_client.channel)
         await self.safe_send_message(context, msg)
 
     @command(description='Resumes the audio from where it stopped')
@@ -40,8 +39,8 @@ class MusicManagerCog(Cog):
         player.resume()
         msg = self.str.get(
             'cmd-pause-reply',
-            'Resumed music in `{player.voice_client.channel.name}`'
-        )
+            'Resumed music in `{0.name}`'
+        ).format(player.voice_client.channel)
         await self.safe_send_message(context, msg)
 
     @command(description='Shuffles the queue')
@@ -50,8 +49,8 @@ class MusicManagerCog(Cog):
         player.playlist.shuffle()
         msg = self.str.get(
             'cmd-shuffle-reply',
-            "Shuffled `{player.voice_client.channel.guild}`'s queue."
-        )
+            "Shuffled `{0}`'s queue."
+        ).format(player.voice_client.channel.guild)
         await self.safe_send_message(context, msg)
 
     @command(description='Remove all entries in the queue')
@@ -60,8 +59,8 @@ class MusicManagerCog(Cog):
         player.playlist.clear()
         msg = self.str.get(
             'cmd-clear-reply',
-            "Cleared `{player.voice_client.channel.guild}`'s queue"
-        )
+            "Cleared `{0}`'s queue"
+        ).format(player.voice_client.channel.guild)
         await self.safe_send_message(context, msg)
 
     @command(
@@ -84,8 +83,8 @@ class MusicManagerCog(Cog):
 
         error_msg = self.str.get(
             'cmd-remove-invalid',
-            f'Invalid number. Use {self.config.command_prefix}queue to find queue positions.'
-        )
+            'Invalid number. Use {0}queue to find queue positions.'
+        ).format(self.config.command_prefix)
         invalid_number_error = CommandError(error_msg, expire_in=20)
         try:
             index = int(index)
