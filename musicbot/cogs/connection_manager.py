@@ -1,8 +1,8 @@
 import logging
 
 from discord import Guild, Member
-from discord.ext.commands import Context, command
-from dislash import slash_command
+from discord.ext.commands import Context
+from dislash import command
 
 from ..exceptions import CommandError
 from .custom_cog import CustomCog as Cog
@@ -16,7 +16,7 @@ class ConnectionManagerCog(Cog):
                 return voice_client
         return None
 
-    @slash_command()
+    @command(description='Summons the bot into the voice channel you currently are')
     async def summon(self, context: Context):
         author: Member = context.author
 
@@ -77,20 +77,20 @@ class ConnectionManagerCog(Cog):
                 player_cog
             )
 
-    @command()
+    @command(description='Removes the bot from the current voice channel')
     async def disconnect(self, context: Context):
         guild = context.guild
         player_cog = self.get_player_cog()
         await self.disconnect_voice_client(guild, player_cog)
 
-    @command()
-    async def shutdown(self, context: Context):
-        channel = context.channel
-        await self.safe_send_message(channel, "\N{WAVING HAND SIGN}")
+    # @command(description='Turns off the bot')
+    # async def shutdown(self, context: Context):
+    #     channel = context.channel
+    #     await self.safe_send_message(channel, "\N{WAVING HAND SIGN}")
 
-        player_cog = self.get_player_cog()
-        player = player_cog.get_player_in(channel.guild)
-        if player and player.is_paused:
-            player.resume()
+    #     player_cog = self.get_player_cog()
+    #     player = player_cog.get_player_in(channel.guild)
+    #     if player and player.is_paused:
+    #         player.resume()
 
-        await self.disconnect_all_voice_clients(player_cog)
+    #     await self.disconnect_all_voice_clients(player_cog)
