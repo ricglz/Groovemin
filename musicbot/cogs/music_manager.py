@@ -12,7 +12,7 @@ from .custom_cog import CustomCog as Cog
 
 log = logging.getLogger(__name__)
 
-class MusicManager(Cog):
+class MusicManagerCog(Cog):
     @command
     async def pause(self, context: Context):
         player = await self._get_player(context.channel)
