@@ -48,7 +48,9 @@ class ConnectionManagerCog(Cog):
 
             await self._initialize_player(author)
 
-        log.info("Joining {0.guild.name}/{0.name}".format(author.voice.channel))
+        msg = "Joining {0.guild.name}/{0.name}".format(author.voice.channel)
+        log.info(msg)
+        await self.safe_send_message(context, msg)
 
     async def _initialize_player(self, author: Member):
         player_cog = self.get_player_cog()
@@ -82,6 +84,7 @@ class ConnectionManagerCog(Cog):
         guild = context.guild
         player_cog = self.get_player_cog()
         await self.disconnect_voice_client(guild, player_cog)
+        await self.safe_send_message(context, 'Bot was disconnected')
 
     # @command(description='Turns off the bot')
     # async def shutdown(self, context: Context):
