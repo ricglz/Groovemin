@@ -3,7 +3,8 @@ from math import ceil
 from typing import Optional
 import logging
 
-from discord.ext.commands import Context, command
+from discord.ext.commands import Context
+from dislash import command, Option, OptionType
 
 from ..constants import DISCORD_MSG_CHAR_LIMIT
 from ..exceptions import CommandError, PermissionsError
@@ -13,7 +14,7 @@ from .custom_cog import CustomCog as Cog
 log = logging.getLogger(__name__)
 
 class MusicManagerCog(Cog):
-    @command
+    @command(description='Pauses the audio')
     async def pause(self, context: Context):
         player = await self._get_player(context.channel)
 
@@ -28,7 +29,7 @@ class MusicManagerCog(Cog):
         )
         await self.safe_send_message(context, msg)
 
-    @command
+    @command(description='Resumes the audio from where it stopped')
     async def resume(self, context: Context):
         player = await self._get_player(context.channel)
 
@@ -43,7 +44,7 @@ class MusicManagerCog(Cog):
         )
         await self.safe_send_message(context, msg)
 
-    @command
+    @command(description='Shuffles the queue')
     async def shuffle(self, context: Context):
         player = await self._get_player(context.channel)
         player.playlist.shuffle()
@@ -53,7 +54,7 @@ class MusicManagerCog(Cog):
         )
         await self.safe_send_message(context, msg)
 
-    @command
+    @command(description='Remove all entries in the queue')
     async def clear(self, context: Context):
         player = await self._get_player(context.channel)
         player.playlist.clear()
@@ -63,7 +64,16 @@ class MusicManagerCog(Cog):
         )
         await self.safe_send_message(context, msg)
 
-    @command
+    @command(
+        description='Removes a given entry of the queue, or removes the last one',
+        options=[
+            Option(
+                'index',
+                'Position of the entry in the queue',
+                OptionType.INTEGER,
+            )
+        ]
+    )
     async def remove(self, context: Context, index: Optional[str]=None):
         player = await self._get_player(context.channel)
         if not player.playlist.entries:
@@ -111,7 +121,7 @@ class MusicManagerCog(Cog):
         response_msg = response_msg.strip()
         await self.safe_send_message(context, response_msg)
 
-    @command
+    @command(description='Displays a queue of the following entries')
     async def queue(self, context: Context):
         player = self._get_player(context.channel)
         lines = []
