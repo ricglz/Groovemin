@@ -6,7 +6,8 @@ import traceback
 
 import discord
 from discord import Member
-from discord.ext.commands import Context, command
+from discord.ext.commands import Context
+from dislash import command, Option, OptionType
 
 from ..exceptions import CommandError, PermissionsError, SpotifyError
 from ..spotify import Spotify
@@ -459,10 +460,19 @@ class PlayCog(CustomCog):
 
         await self.safe_send_message(context, reply_text, expire_in=30)
 
-    @command()
-    async def play(self, context: Context, *args):
-        song_query = ' '.join(args)
-        song_url = parse_song_url(song_query)
+    @command(
+        description='Plays given song',
+        options=[
+            Option(
+                'query',
+                'Words query or spotify/youtube url for a song, album or playlist',
+                OptionType.STRING,
+                required=True,
+            )
+        ]
+    )
+    async def play(self, context: Context, query: str):
+        song_url = parse_song_url(query)
         await self._play(context, song_url)
 
     async def _do_playlist_checks(self, permissions, player, author, testobj):

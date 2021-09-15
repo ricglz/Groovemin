@@ -2,7 +2,8 @@ from datetime import timedelta
 import logging
 
 from discord import Guild
-from discord.ext.commands import Context, command
+from discord.ext.commands import Context
+from dislash import command
 
 from ..exceptions import CommandError
 from ..playlist import StreamPlaylistEntry
@@ -41,7 +42,9 @@ class NowPlayingCog(Cog):
 
         return prog_str, prog_bar_str
 
-    @command
+    @command(
+        description='Sends message specifying which entry is currently playing and how long it will last'
+    )
     async def now_playing(self, context: Context):
         player = await self._get_player(context.channel)
         if not player.current_entry:
