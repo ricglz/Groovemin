@@ -8,6 +8,7 @@ from .music_manager import MusicManagerCog
 from .now_playing import NowPlayingCog
 from .play import PlayCog
 from .player import PlayerCog
+from .special_play import SpecialPlayCog
 
 COGS: List[Cog] = [
     ConnectionManagerCog,
@@ -16,4 +17,5 @@ COGS: List[Cog] = [
     NowPlayingCog,
     PlayCog,
     PlayerCog,
+    SpecialPlayCog,
 ]
