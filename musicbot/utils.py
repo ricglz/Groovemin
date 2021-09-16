@@ -1,9 +1,10 @@
-import sys
-import logging
-import aiohttp
-import inspect
-
 from hashlib import md5
+import inspect
+import logging
+import sys
+
+import aiohttp
+
 from .constants import DISCORD_MSG_CHAR_LIMIT
 
 log = logging.getLogger(__name__)

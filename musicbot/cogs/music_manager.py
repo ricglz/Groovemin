@@ -1,3 +1,4 @@
+'''Module containing MusicManagerCog.'''
 from datetime import timedelta
 from math import ceil
 from typing import Optional
@@ -14,8 +15,13 @@ from .custom_cog import CustomCog as Cog
 log = logging.getLogger(__name__)
 
 class MusicManagerCog(Cog):
+    '''
+    Class in charge of managing the music commands aside from play.
+    '''
+
     @command(description='Pauses the audio')
     async def pause(self, context: Context):
+        '''Pauses the audio'''
         player = await self._get_player(context.channel)
 
         if player.is_paused:
@@ -30,6 +36,7 @@ class MusicManagerCog(Cog):
 
     @command(description='Resumes the audio from where it stopped')
     async def resume(self, context: Context):
+        '''Resumes the audio from where it stopped'''
         player = await self._get_player(context.channel)
 
         if player.is_playing:
@@ -45,6 +52,7 @@ class MusicManagerCog(Cog):
 
     @command(description='Shuffles the queue')
     async def shuffle(self, context: Context):
+        '''Shuffles the queue'''
         player = await self._get_player(context.channel)
         player.playlist.shuffle()
         msg = self.str.get(
@@ -55,6 +63,7 @@ class MusicManagerCog(Cog):
 
     @command(description='Remove all entries in the queue')
     async def clear(self, context: Context):
+        '''Remove all entries in the queue'''
         player = await self._get_player(context.channel)
         player.playlist.clear()
         msg = self.str.get(
@@ -74,6 +83,7 @@ class MusicManagerCog(Cog):
         ]
     )
     async def remove(self, context: Context, index: Optional[str]=None):
+        '''Removes a given entry of the queue, or removes the last one'''
         player_cog = self._get_player_cog()
         player = await player_cog.get_player(context.channel)
         if not player.playlist.entries:
@@ -122,68 +132,72 @@ class MusicManagerCog(Cog):
         await player_cog.serialize_queue(player.voice_client.channel.guild)
         await self.safe_send_message(context, response_msg)
 
+    def _is_playing_line(self, player):
+        # TODO: Fix timedelta garbage with util function
+        song_progress = ftimedelta(timedelta(seconds=player.progress))
+        song_total = ftimedelta(timedelta(seconds=player.current_entry.duration))
+        prog_str = '`[%s/%s]`' % (song_progress, song_total)
+
+        if player.current_entry.meta.get('channel', False) and \
+           player.current_entry.meta.get('author', False):
+            return self.str.get(
+                'cmd-queue-playing-author',
+                "Currently playing: `{0}` added by `{1}` {2}\n"
+            ).format(
+                player.current_entry.title,
+                player.current_entry.meta['author'].nae,
+                prog_str
+            )
+        return self.str.get(
+            'cmd-queue-playing-noauthor',
+            "Currently playing: `{0}` {1}\n"
+        ).format(player.current_entry.title, prog_str)
+
+    def _get_next_line(self, i: int, item: object):
+        if item.meta.get('channel', False) and item.meta.get('author', False):
+            next_line = self.str.get(
+                'cmd-queue-entry-author',
+                '{0} -- `{1}` by `{2}`'
+            ).format(i, item.title, item.meta['author'].name)
+        else:
+            next_line = self.str.get(
+                'cmd-queue-entry-noauthor',
+                '{0} -- `{1}`'
+            ).format(i, item.title)
+        return next_line.strip()
+
     @command(description='Displays a queue of the following entries')
     async def queue(self, context: Context):
+        '''Displays a queue of the following entries'''
         player = await self._get_player(context.channel)
         lines = []
         unlisted = 0
-        andmoretext = '* ... and %s more*' % ('x' * len(player.playlist.entries))
+        and_more_text = '* ... and %s more*' % ('x' * len(player.playlist.entries))
 
         if player.is_playing:
-            # TODO: Fix timedelta garbage with util function
-            song_progress = ftimedelta(timedelta(seconds=player.progress))
-            song_total = ftimedelta(timedelta(seconds=player.current_entry.duration))
-            prog_str = '`[%s/%s]`' % (song_progress, song_total)
+            lines.append(self._is_playing_line(player))
 
-            if player.current_entry.meta.get('channel', False) and \
-               player.current_entry.meta.get('author', False):
-                line = self.str.get(
-                    'cmd-queue-playing-author',
-                    "Currently playing: `{0}` added by `{1}` {2}\n"
-                ).format(
-                    player.current_entry.title,
-                    player.current_entry.meta['author'].nae,
-                    prog_str
-                )
-            else:
-                line = self.str.get(
-                    'cmd-queue-playing-noauthor',
-                    "Currently playing: `{0}` {1}\n"
-                ).format(player.current_entry.title, prog_str)
-            lines.append(line)
-
-        currentlinesum = len(lines[0]) + 1 if player.is_playing else 0
+        current_line_sum = len(lines[0]) + 1 if player.is_playing else 0
         for i, item in enumerate(player.playlist, 1):
-            if item.meta.get('channel', False) and item.meta.get('author', False):
-                nextline = self.str.get(
-                    'cmd-queue-entry-author',
-                    '{0} -- `{1}` by `{2}`'
-                ).format(i, item.title, item.meta['author'].name)
-            else:
-                nextline = self.str.get(
-                    'cmd-queue-entry-noauthor',
-                    '{0} -- `{1}`'
-                ).format(i, item.title)
-            nextline.strip()
-
-            potential_len = currentlinesum + len(nextline) + len(andmoretext)
-            if (potential_len > DISCORD_MSG_CHAR_LIMIT) or \
+            next_line = self._get_next_line(i, item)
+            potential_len = current_line_sum + len(next_line) + len(and_more_text)
+            if potential_len > DISCORD_MSG_CHAR_LIMIT or \
                i > self.config.queue_length:
-                if currentlinesum + len(andmoretext):
+                if current_line_sum + len(and_more_text):
                     unlisted += 1
                     continue
 
-            lines.append(nextline)
-            currentlinesum = len(nextline) + 1
+            lines.append(next_line)
+            current_line_sum += len(next_line) + 1
 
-        if unlisted:
+        if unlisted > 0:
             lines.append(self.str.get('cmd-queue-more', '\n... and %s more') % unlisted)
 
         if not lines:
             lines.append(
                 self.str.get(
                     'cmd-queue-none',
-                    'There are no songs queued! Queue something with {}play.'
+                    'There are no songs queued! Queue something with {0}play.'
                 ).format(self.config.command_prefix)
             )
 
@@ -192,6 +206,7 @@ class MusicManagerCog(Cog):
 
     @command(description='Allows to skip the current song')
     async def skip(self, context: Context):
+        '''Allows to skip the current song'''
         player = await self._get_player(context.channel)
         if player.is_stopped:
             error_msg = self.str.get('cmd-skip-none', "Can't skip! The player is not playing!")
@@ -223,7 +238,7 @@ class MusicManagerCog(Cog):
               if not (m.voice.deaf or m.voice.self_deaf or m == self.bot.user)
         )
 
-        # Incase all users are deafened, to avoid division by zero
+        # In case all users are deafened, to avoid division by zero
         if num_voice == 0:
             num_voice = 1
 
@@ -256,7 +271,8 @@ class MusicManagerCog(Cog):
                         else self.str.get('cmd-skip-reply-voted-3', 'people are')
             response_msg = self.str.get(
                 'cmd-skip-reply-voted-1',
-                'Your skip for `{0}` was acknowledged.\n**{1}** more {2} required to vote to skip this song.'
+                'Your skip for `{0}` was acknowledged.\n**{1}** more {2}'
+                ' required to vote to skip this song.'
             ).format(
                 current_entry.title,
                 skips_remaining,
