@@ -360,9 +360,8 @@ class PlayCog(CustomCog):
 
         await self._do_playlist_checks(permissions, player, author, res['tracks']['items'])
         procmsg = self.str.get(
-            'cmd-play-spotify-album-process',
-            'Processing album `{res["name"]}` (`{play_req.song_url}`)'
-        )
+            'cmd-play-spotify-album-process', 'Processing album `{0}` (`{1}`)'
+        ).format(res["name"], play_req.song_url)
         procmsg = await self.safe_send_message(channel, procmsg)
 
         items = res['tracks']['items']
@@ -372,13 +371,12 @@ class PlayCog(CustomCog):
         for i in items:
             song_url = i['name'] + ' ' + i['artists'][0]['name']
             log.debug('Processing %s', song_url)
-            await self._play(context, song_url)
+            await self._play(context, song_url, spotify=True)
         await self.safe_delete_message(procmsg)
 
         return self.str.get(
-            'cmd-play-spotify-album-queued',
-            f"Enqueued `{res['name']}` with **{len(res['tracks']['items'])}** songs."
-        )
+            'cmd-play-spotify-album-queued', "Enqueued `{0}` with **{1}** songs."
+        ).format(res['name'], len(res['tracks']['items']))
 
     async def _handle_spotify_playlist(
         self, play_req: PlayRequirements, context: Context, parts: list
@@ -396,8 +394,8 @@ class PlayCog(CustomCog):
         await self._do_playlist_checks(permissions, player, author, res)
         procmsg = self.str.get(
             'cmd-play-spotify-playlist-process',
-            f'Processing playlist `{parts[-1]}` (`{play_req.song_url}`)'
-        )
+            'Processing playlist `{0}` (`{1}`)'
+        ).format(parts[-1], play_req.song_url)
         procmsg = await self.safe_send_message(channel, procmsg)
 
         if play_req.shuffle:
@@ -406,12 +404,11 @@ class PlayCog(CustomCog):
         for i in res:
             song_url = i['track']['name'] + ' ' + i['track']['artists'][0]['name']
             log.debug('Processing %s', song_url)
-            await self._play(context, song_url)
+            await self._play(context, song_url, spotify=True)
         await self.safe_delete_message(procmsg)
         return self.str.get(
-            'cmd-play-spotify-playlist-queued',
-            f"Enqueued `{parts[-1]}` with **{len(res)}** songs."
-        )
+            'cmd-play-spotify-playlist-queued', "Enqueued `{0}` with **{1}** songs."
+        ).format(parts[-1], len(res))
 
     async def _handle_spotify(self, play_req: PlayRequirements, context: Context):
         parts = play_req.song_url.split(":")
