@@ -38,7 +38,7 @@ class MusicManagerCog(Cog):
 
         player.resume()
         msg = self.str.get(
-            'cmd-pause-reply',
+            'cmd-resume-reply',
             'Resumed music in `{0.name}`'
         ).format(player.voice_client.channel)
         await self.safe_send_message(context, msg)
