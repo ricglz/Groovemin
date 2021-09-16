@@ -355,7 +355,7 @@ class PlayerCog(Cog):
                     player.once('play', lambda player, **_: _autopause(player))
 
                 try:
-                    await player.playlist.add_entry(song_url, channel=None, author=None)
+                    await player.playlist.add_entry(song_url, info, channel=None, author=None)
                 except ExtractionError as e:
                     log.error("Error adding song from autoplaylist: {}".format(e))
                     log.debug('', exc_info=True)
@@ -374,7 +374,7 @@ class PlayerCog(Cog):
         if not player.is_stopped and not player.is_dead:
             player.play(_continue=True)
 
-    async def on_player_entry_added(self, player, _playlist, entry, **_):
+    async def on_player_entry_added(self, player, playlist, entry, **_):
         log.debug('Running on_player_entry_added')
         if entry.meta.get('author') and entry.meta.get('channel'):
             await self.serialize_queue(player.voice_client.channel.guild)

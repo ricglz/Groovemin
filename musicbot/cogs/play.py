@@ -404,7 +404,10 @@ class PlayCog(CustomCog):
         for i in res:
             song_url = i['track']['name'] + ' ' + i['track']['artists'][0]['name']
             log.debug('Processing %s', song_url)
-            await self._play(context, song_url, spotify=True)
+            try:
+                await self._play(context, song_url, spotify=True)
+            except CommandError:
+                continue
         await self.safe_delete_message(procmsg)
         return self.str.get(
             'cmd-play-spotify-playlist-queued', "Enqueued `{0}` with **{1}** songs."

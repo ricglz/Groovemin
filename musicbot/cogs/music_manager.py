@@ -227,7 +227,9 @@ class MusicManagerCog(Cog):
         if num_voice == 0:
             num_voice = 1
 
-        num_skips = player.skip_state.add_skipper(context.author.id, context.message)
+        # TODO: Check how to use this
+        # num_skips = player.skip_state.add_skipper(context.author.id, context.message)
+        num_skips = 0
 
         skips_remaining = min(
             self.config.skips_required,
