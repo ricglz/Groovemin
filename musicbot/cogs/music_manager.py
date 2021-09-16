@@ -74,7 +74,8 @@ class MusicManagerCog(Cog):
         ]
     )
     async def remove(self, context: Context, index: Optional[str]=None):
-        player = await self._get_player(context.channel)
+        player_cog = self.get_player_cog()
+        player = await player_cog.get_player(context.channel)
         if not player.playlist.entries:
             error_msg = self.str.get('cmd-remove-none', "There's nothing to remove!")
             raise CommandError(error_msg, expire_in=20)
@@ -118,6 +119,7 @@ class MusicManagerCog(Cog):
                 "Removed entry `{0}`"
             ).format(entry.title)
         response_msg = response_msg.strip()
+        await player_cog.serialize_queue(player.voice_client.channel.guild)
         await self.safe_send_message(context, response_msg)
 
     @command(description='Displays a queue of the following entries')
