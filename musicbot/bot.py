@@ -23,11 +23,6 @@ from .permissions import Permissions, PermissionsDefaults
 from .utils import load_file
 from .cogs import COGS
 
-# from . import exceptions
-# from .entry import StreamPlaylistEntry
-# from .constructs import SkipState, Response
-# from .constants import DISCORD_MSG_CHAR_LIMIT, AUDIO_CACHE_PATH
-
 load_opus_lib()
 
 log = logging.getLogger(__name__)
@@ -77,7 +72,16 @@ class MusicBot(Bot):
         for cog_class in COGS:
             self.add_cog(cog_class(self))
 
-        InteractionClient(self, test_guilds=list(self.config.servers))
+        interactive_client = InteractionClient(self, test_guilds=list(self.config.servers))
+        self._setup_my_listeners(interactive_client)
+
+    def _setup_my_listeners(self, interactive_client: InteractionClient):
+        interactive_client.events['on_slash_command_error'] = self.on_command_error
+        interactive_client.events['slash_command_error'] = self.on_command_error
+        interactive_client.events['on_user_command_error'] = self.on_command_error
+        interactive_client.events['user_command_error'] = self.on_command_error
+        interactive_client.events['on_message_command_error'] = self.on_command_error
+        interactive_client.events['message_command_error'] = self.on_command_error
 
     def _setup_logging(self):
         if len(logging.getLogger(__package__).handlers) > 1:
@@ -132,7 +136,7 @@ class MusicBot(Bot):
             raise ValueError('MessengerCog is missing')
         if isinstance(exception, CommandInvokeError):
             exception = exception.original
-        expire_in = 0
+        expire_in = None
         if isinstance(exception, (MusicbotException)):
             expire_in = exception.expire_in
         else:
