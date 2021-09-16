@@ -124,7 +124,7 @@ class MusicManagerCog(Cog):
 
     @command(description='Displays a queue of the following entries')
     async def queue(self, context: Context):
-        player = self._get_player(context.channel)
+        player = await self._get_player(context.channel)
         lines = []
         unlisted = 0
         andmoretext = '* ... and %s more*' % ('x' * len(player.playlist.entries))
@@ -152,7 +152,7 @@ class MusicManagerCog(Cog):
                 ).format(player.current_entry.title, prog_str)
             lines.append(line)
 
-        currentlinesum = len(lines[0] + 1)
+        currentlinesum = len(lines[0]) + 1 if player.is_playing else 0
         for i, item in enumerate(player.playlist, 1):
             if item.meta.get('channel', False) and item.meta.get('author', False):
                 nextline = self.str.get(
