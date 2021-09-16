@@ -190,8 +190,9 @@ class MusicManagerCog(Cog):
         message = '\n'.join(lines)
         await self.safe_send_message(context, message)
 
-    async def cmd_skip(self, context: Context):
-        player = self._get_player(context.channel)
+    @command(description='Allows to skip the current song')
+    async def skip(self, context: Context):
+        player = await self._get_player(context.channel)
         if player.is_stopped:
             error_msg = self.str.get('cmd-skip-none', "Can't skip! The player is not playing!")
             raise CommandError(error_msg, expire_in=20)
@@ -205,7 +206,7 @@ class MusicManagerCog(Cog):
                     ) % player.playlist.peek().title
                     return await self.safe_send_message(context, response_msg)
 
-                elif player.playlist.peek().is_downloaded:
+                if player.playlist.peek().is_downloaded:
                     print("The next song will be played shortly. Please wait.")
                 else:
                     print("Something odd is happening.  "
