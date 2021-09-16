@@ -427,6 +427,7 @@ class PlayCog(CustomCog):
                     'cmd-play-spotify-unsupported',
                     'That is not a supported Spotify URI.'
                 )
+                error_msg = f'{error_msg}: {play_req.song_url}'
                 raise CommandError(error_msg, expire_in=30)
 
             await self.safe_send_message(play_req.channel, response_msg)
