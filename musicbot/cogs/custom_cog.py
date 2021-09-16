@@ -1,16 +1,25 @@
 '''Custom Cog module'''
+from __future__ import annotations
 from dataclasses import dataclass
-from typing import Optional
+from typing import TYPE_CHECKING
 
 from discord.abc import GuildChannel
-from discord.ext.commands import Bot, Cog
+from discord.ext.commands import Cog
 
-from ..config import Config
 from ..player import MusicPlayer
+
+if TYPE_CHECKING:
+    from ..bot import MusicBot
+    from .messenger import MessengerCog
+    from .player import PlayerCog
 
 @dataclass
 class CustomCog(Cog):
-    bot: Bot
+    '''
+    Auxiliar class for other cog classes as it contains helper attributes
+    functions shared between them
+    '''
+    bot: MusicBot
 
     @property
     def voice_clients(self):
@@ -22,7 +31,7 @@ class CustomCog(Cog):
         return self.bot.str
 
     @property
-    def config(self) -> Config:
+    def config(self):
         return self.bot.config
 
     @property
@@ -48,18 +57,13 @@ class CustomCog(Cog):
     @staticmethod
     def _check_if_empty(v_channel: GuildChannel, *, excluding_me=True, excluding_deaf=False):
         def check(member):
-            if excluding_me and member == v_channel.guild.me:
-                return False
+            member_is_me = excluding_me and member == v_channel.guild.me
+            member_is_deaf = excluding_deaf and any([member.deaf, member.self_deaf])
+            member_is_other_bot = member.bot
 
-            if excluding_deaf and any([member.deaf, member.self_deaf]):
-                return False
+            return not (member_is_me or member_is_deaf or member_is_other_bot)
 
-            if member.bot:
-                return False
-
-            return True
-
-        return not sum(1 for m in v_channel.members if check(m))
+        return sum(1 for m in v_channel.members if check(m)) == 0
 
     def _get_cog(self, cog_name: str):
         cog = self.bot.get_cog(cog_name)
@@ -67,19 +71,19 @@ class CustomCog(Cog):
             raise ValueError(f'{cog_name} is missing')
         return cog
 
-    def _get_messenger_cog(self):
+    def _get_messenger_cog(self) -> MessengerCog:
         return self._get_cog('MessengerCog')
 
-    async def safe_send_message(self, dest, content, **kwargs):
-        messenger_cog = self._get_messenger_cog()
-        return await messenger_cog.safe_send_message(dest, content, **kwargs)
-
-    async def safe_delete_message(self, message, *, quiet=False):
-        messenger_cog = self._get_messenger_cog()
-        return await messenger_cog.safe_delete_message(message, quiet=quiet)
-
-    def get_player_cog(self):
+    def _get_player_cog(self) -> PlayerCog:
         return self._get_cog('PlayerCog')
 
+    async def safe_send_message(self, dest, content, **kwargs):
+        '''Send messages to the specified destination'''
+        return await self._get_messenger_cog().safe_send_message(dest, content, **kwargs)
+
+    async def safe_delete_message(self, message, *, quiet=False):
+        '''Deletes a sent message'''
+        return await self._get_messenger_cog().safe_delete_message(message, quiet=quiet)
+
     async def _get_player(self, channel) -> MusicPlayer:
-        return await self.get_player_cog().get_player(channel)
+        return await self._get_player_cog().get_player(channel)

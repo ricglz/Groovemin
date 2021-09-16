@@ -69,7 +69,7 @@ class ConnectionManagerCog(Cog):
         await self.safe_send_message(context, msg)
 
     async def _initialize_player(self, author: Member):
-        player_cog = self.get_player_cog()
+        player_cog = self.g_et_player_cog()
         player = await player_cog.get_player(
             author.voice.channel, create=True, deserialize=self.config.persistent_queue
         )
@@ -103,7 +103,7 @@ class ConnectionManagerCog(Cog):
     async def disconnect(self, context: Context):
         '''Disconnects from the current voice channel'''
         guild: Guild = context.guild
-        player_cog = self.get_player_cog()
+        player_cog = self._get_player_cog()
         await self.disconnect_voice_client(guild, player_cog)
         await self.safe_send_message(context, 'Bot was disconnected')
 
@@ -112,7 +112,7 @@ class ConnectionManagerCog(Cog):
     #     channel = context.channel
     #     await self.safe_send_message(channel, "\N{WAVING HAND SIGN}")
 
-    #     player_cog = self.get_player_cog()
+    #     player_cog = self._get_player_cog()
     #     player = player_cog.get_player_in(channel.guild)
     #     if player and player.is_paused:
     #         player.resume()

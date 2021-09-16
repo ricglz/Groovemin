@@ -74,7 +74,7 @@ class MusicManagerCog(Cog):
         ]
     )
     async def remove(self, context: Context, index: Optional[str]=None):
-        player_cog = self.get_player_cog()
+        player_cog = self._get_player_cog()
         player = await player_cog.get_player(context.channel)
         if not player.playlist.entries:
             error_msg = self.str.get('cmd-remove-none', "There's nothing to remove!")
