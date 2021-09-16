@@ -438,7 +438,13 @@ class PlayCog(CustomCog):
             )
             raise CommandError(error_msg) from error
 
-    async def _play(self, context: Context, song_url: str, shuffle: bool = False):
+    async def _play(
+        self,
+        context: Context,
+        song_url: str,
+        shuffle: bool = False,
+        spotify: bool = False,
+    ):
         author: Member = context.author
         channel = context.channel
         permissions = self.permissions.for_user(author)
@@ -479,6 +485,9 @@ class PlayCog(CustomCog):
                 reply_text, btext, position = await self._handle_entry(
                     play_req, info,
                 )
+
+        if spotify:
+            return
 
         if btext is not None:
             if position == 1 and player.is_stopped:
