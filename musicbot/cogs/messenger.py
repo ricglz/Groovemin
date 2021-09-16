@@ -12,19 +12,20 @@ class MessengerCog(CustomCog):
     async def safe_send_message(self, dest, content, **kwargs):
         tts = kwargs.pop('tts', False)
         quiet = kwargs.pop('quiet', False)
-        expire_in = kwargs.pop('expire_in', 0)
+        expire_in = kwargs.pop('expire_in', None)
         allow_none = kwargs.pop('allow_none', True)
-        also_delete = kwargs.pop('also_delete', None)
 
         msg = None
         log_func = log.debug if quiet else log.warning
 
         try:
             if content is not None or allow_none:
-                if isinstance(content, discord.Embed):
-                    msg = await dest.reply(embed=content)
+                if isinstance(dest, discord.TextChannel):
+                    msg = await dest.send(content, tts=tts, delete_after=expire_in)
+                elif isinstance(content, discord.Embed):
+                    msg = await dest.reply(embed=content, delete_after=expire_in)
                 else:
-                    msg = await dest.reply(content, tts=tts)
+                    msg = await dest.reply(content, tts=tts, delete_after=expire_in)
 
         except discord.Forbidden:
             log_func("Cannot send message to \"%s\", no permission", dest.name)
@@ -38,13 +39,6 @@ class MessengerCog(CustomCog):
             else:
                 log_func("Failed to send message")
                 log.noise("Got HTTPException trying to send message to %s: %s", dest, content)
-
-        finally:
-            if msg and expire_in:
-                asyncio.ensure_future(self._wait_delete_msg(msg, expire_in))
-
-            if also_delete and isinstance(also_delete, discord.Message):
-                asyncio.ensure_future(self._wait_delete_msg(also_delete, expire_in))
 
         return msg
 
