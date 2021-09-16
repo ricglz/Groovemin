@@ -104,10 +104,13 @@ class PlayCog(CustomCog):
                 except:
                     info_process = None
 
-                log.debug(info)
 
-                if info_process and info and info_process.get('_type', None) == 'playlist' and \
-                   'entries' not in info and not info.get('url', '').startswith('ytsearch'):
+                if info_process is None or info is None:
+                    break
+
+                if info_process.get('_type', None) == 'playlist' \
+                   and 'entries' not in info \
+                   and not info.get('url', '').startswith('ytsearch'):
                     use_url = info_process.get('webpage_url', None) or info_process.get('url', None)
                     if use_url == song_url:
                         log.warning(
@@ -332,7 +335,7 @@ class PlayCog(CustomCog):
                 f"Song duration exceeds limit ({info['duration']} > {permissions.max_song_length})")
             raise PermissionsError(error_msg, expire_in=30)
 
-        entry, position = await player.playlist.add_entry(play_req.song_url, channel=channel, author=author)
+        entry, position = await player.playlist.add_entry(play_req.song_url, info, channel=channel, author=author)
 
         reply_text = self.str.get('cmd-play-song-reply', "Enqueued `%s` to be played. Position in queue: %s")
         btext = entry.title
@@ -451,13 +454,12 @@ class PlayCog(CustomCog):
 
         player = await self._get_player(author.voice.channel)
 
-        play_requirements = PlayRequirements(
+        song_url = parser_song_url_spotify(song_url)
+        play_req = PlayRequirements(
             author, channel, permissions, player, shuffle, song_url,
         )
-        if self.config._spotify:
-            song_url = parser_song_url_spotify(song_url)
-            if song_url.startswith('spotify:'):
-                return await self._handle_spotify(play_requirements, context)
+        if self.config._spotify and song_url.startswith('spotify:'):
+            return await self._handle_spotify(play_req, context)
 
         async with self.aiolocks[_func_() + ':' + str(author.id)]:
             self._check_for_permissions(permissions, player, author)
@@ -472,14 +474,12 @@ class PlayCog(CustomCog):
 
             if 'entries' in info:
                 reply_text, btext, position = await self._handle_entries(
-                    play_requirements,
-                    info,
+                    play_req, info,
                 )
 
             else:
                 reply_text, btext, position = await self._handle_entry(
-                    play_requirements,
-                    info,
+                    play_req, info,
                 )
 
         if btext is not None:
