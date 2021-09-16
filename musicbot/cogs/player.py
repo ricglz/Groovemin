@@ -374,7 +374,7 @@ class PlayerCog(Cog):
         if not player.is_stopped and not player.is_dead:
             player.play(_continue=True)
 
-    async def on_player_entry_added(self, player, playlist, entry, **_):
+    async def on_player_entry_added(self, player, _playlist, entry, **_):
         log.debug('Running on_player_entry_added')
         if entry.meta.get('author') and entry.meta.get('channel'):
             await self.serialize_queue(player.voice_client.channel.guild)

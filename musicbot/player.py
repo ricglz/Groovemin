@@ -359,8 +359,7 @@ class MusicPlayer(EventEmitter, Serializable):
         try:
             return json.loads(raw_json, object_hook=Serializer.deserialize)
         except Exception as e:
-            log.exception("Failed to deserialize player", e)
-
+            log.exception("Failed to deserialize player, %s", e)
 
     @property
     def current_entry(self):
