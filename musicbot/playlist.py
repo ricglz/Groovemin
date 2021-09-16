@@ -7,7 +7,7 @@ from itertools import islice
 from collections import deque
 
 from urllib.error import URLError
-from youtube_dl.utils import ExtractorError, DownloadError, UnsupportedError
+from youtube_dl.utils import DownloadError, UnsupportedError
 
 from .utils import get_header
 from .constructs import Serializable
@@ -41,21 +41,20 @@ class Playlist(EventEmitter, Serializable):
 
     def clear(self):
         self.entries.clear()
-        
+
     def get_entry_at_index(self, index):
         self.entries.rotate(-index)
         entry = self.entries[0]
         self.entries.rotate(index)
         return entry
-        
+
     def delete_entry_at_index(self, index):
         self.entries.rotate(-index)
         entry = self.entries.popleft()
         self.entries.rotate(index)
         return entry
 
-
-    async def add_entry(self, song_url, **meta):
+    async def add_entry(self, song_url, info, **meta):
         """
             Validates and adds a song_url to be played. This does not start the download of the song.
 
@@ -64,11 +63,6 @@ class Playlist(EventEmitter, Serializable):
             :param song_url: The song url to add to the playlist.
             :param meta: Any additional metadata to add to the playlist entry.
         """
-
-        try:
-            info = await self.downloader.extract_info(self.loop, song_url, download=False)
-        except Exception as e:
-            raise ExtractionError('Could not extract information from {}\n\n{}'.format(song_url, e))
 
         if not info:
             raise ExtractionError('Could not extract information from %s' % song_url)
@@ -372,4 +366,3 @@ class Playlist(EventEmitter, Serializable):
 
         # TODO: create a function to init downloading (since we don't do it here)?
         return pl
-

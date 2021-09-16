@@ -40,12 +40,16 @@ class Config:
         self.spotify_clientid = config.get('Credentials', 'Spotify_ClientID', fallback=ConfigDefaults.spotify_clientid)
         self.spotify_clientsecret = config.get('Credentials', 'Spotify_ClientSecret', fallback=ConfigDefaults.spotify_clientsecret)
 
+        self.normie_playlist = config.get('Playlists', 'NormiePlaylist', fallback=ConfigDefaults.normie_playlist)
+        self.weeb_playlist = config.get('Playlists', 'WeebPlaylist', fallback=ConfigDefaults.weeb_playlist)
+
         self.owner_id = config.get('Permissions', 'OwnerID', fallback=ConfigDefaults.owner_id)
         self.dev_ids = config.get('Permissions', 'DevIDs', fallback=ConfigDefaults.dev_ids)
         self.bot_exception_ids = config.get("Permissions", "BotExceptionIDs", fallback=ConfigDefaults.bot_exception_ids)
 
         self.command_prefix = config.get('Chat', 'CommandPrefix', fallback=ConfigDefaults.command_prefix)
         self.bound_channels = config.get('Chat', 'BindToChannels', fallback=ConfigDefaults.bound_channels)
+        self.servers = config.get('Chat', 'Servers', fallback=ConfigDefaults.servers)
         self.unbound_servers = config.getboolean('Chat', 'AllowUnboundServers', fallback=ConfigDefaults.unbound_servers)
         self.autojoin_channels =  config.get('Chat', 'AutojoinChannels', fallback=ConfigDefaults.autojoin_channels)
         self.dm_nowplaying = config.getboolean('Chat', 'DMNowPlaying', fallback=ConfigDefaults.dm_nowplaying)
@@ -183,6 +187,13 @@ class Config:
             except:
                 log.warning("BindToChannels data is invalid, will not bind to any channels")
                 self.bound_channels = set()
+
+        if self.servers:
+            try:
+                self.servers = set(int(x) for x in self.servers.replace(',', ' ').split() if x)
+            except:
+                log.warning("Servers data is invalid, will not bind to any channels")
+                self.servers = set()
 
         if self.autojoin_channels:
             try:
@@ -331,8 +342,12 @@ class ConfigDefaults:
     spotify_clientid = None
     spotify_clientsecret = None
 
+    normie_playlist = None
+    weeb_playlist = None
+
     command_prefix = '!'
     bound_channels = set()
+    servers = set()
     unbound_servers = False
     autojoin_channels = set()
     dm_nowplaying = False

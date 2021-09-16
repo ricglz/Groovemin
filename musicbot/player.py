@@ -1,22 +1,20 @@
-import os
-import sys
-import json
-import logging
+from array import array
+from collections import deque
+from enum import Enum
+from shutil import get_terminal_size
+from threading import Thread
 import asyncio
 import audioop
+import json
+import logging
+import os
 import subprocess
-import re
+import sys
 
 from discord import FFmpegPCMAudio, PCMVolumeTransformer, AudioSource
 
-from enum import Enum
-from array import array
-from threading import Thread
-from collections import deque
-from shutil import get_terminal_size
-from websockets.exceptions import InvalidState
-
-from .utils import avg, _func_
+from .playlist import Playlist
+from .utils import avg
 from .lib.event_emitter import EventEmitter
 from .constructs import Serializable, Serializer
 from .exceptions import FFmpegError, FFmpegWarning
@@ -115,7 +113,7 @@ class SourcePlaybackCounter(AudioSource):
 
 
 class MusicPlayer(EventEmitter, Serializable):
-    def __init__(self, bot, voice_client, playlist):
+    def __init__(self, bot, voice_client, playlist: Playlist):
         super().__init__()
         self.bot = bot
         self.loop = bot.loop
@@ -361,8 +359,7 @@ class MusicPlayer(EventEmitter, Serializable):
         try:
             return json.loads(raw_json, object_hook=Serializer.deserialize)
         except Exception as e:
-            log.exception("Failed to deserialize player", e)
-
+            log.exception("Failed to deserialize player, %s", e)
 
     @property
     def current_entry(self):

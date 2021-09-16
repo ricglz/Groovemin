@@ -282,7 +282,7 @@ def req_ensure_encoding():
 
         import io
         sys.stdout = io.TextIOWrapper(sys.stdout.detach(), encoding='utf8', line_buffering=True)
-        # only slightly evil    
+        # only slightly evil
         sys.__stdout__ = sh.stream = sys.stdout
 
         if os.environ.get('PYCHARM_HOSTED', None) not in (None, '0'):
@@ -416,7 +416,7 @@ def main():
                 log.exception("Error starting bot")
 
         finally:
-            if not m or not m.init_ok:
+            if not m:
                 if any(sys.exc_info()):
                     # How to log this without redundant messages...
                     traceback.print_exc()

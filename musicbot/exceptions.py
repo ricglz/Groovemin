@@ -32,6 +32,9 @@ class WrongEntryTypeError(ExtractionError):
         self.is_playlist = is_playlist
         self.use_url = use_url
 
+    def __str__(self):
+        return f"{self.message}. {self.is_playlist}. {self.use_url}"
+
 # FFmpeg complained about something
 class FFmpegError(MusicbotException):
     pass
