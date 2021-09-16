@@ -40,8 +40,8 @@ class Config:
         self.spotify_clientid = config.get('Credentials', 'Spotify_ClientID', fallback=ConfigDefaults.spotify_clientid)
         self.spotify_clientsecret = config.get('Credentials', 'Spotify_ClientSecret', fallback=ConfigDefaults.spotify_clientsecret)
 
-        self.normie_playlist = config.get('Credentials', 'NormiePlaylist', fallback=ConfigDefaults.normie_playlist)
-        self.weeb_playlist = config.get('Credentials', 'WeebPlaylist', fallback=ConfigDefaults.weeb_playlist)
+        self.normie_playlist = config.get('Playlists', 'NormiePlaylist', fallback=ConfigDefaults.normie_playlist)
+        self.weeb_playlist = config.get('Playlists', 'WeebPlaylist', fallback=ConfigDefaults.weeb_playlist)
 
         self.owner_id = config.get('Permissions', 'OwnerID', fallback=ConfigDefaults.owner_id)
         self.dev_ids = config.get('Permissions', 'DevIDs', fallback=ConfigDefaults.dev_ids)
