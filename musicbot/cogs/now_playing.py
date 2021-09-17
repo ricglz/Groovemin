@@ -1,3 +1,4 @@
+'''NowPlaying Cog module'''
 from datetime import timedelta
 import logging
 
@@ -13,14 +14,20 @@ from .custom_cog import CustomCog as Cog
 log = logging.getLogger(__name__)
 
 class NowPlayingCog(Cog):
+    '''Cog class in charge of the now_playing command'''
     async def check_last_msg(self, guild: Guild):
+        '''
+        Checks the last message send to the specified guild, if it exists then
+        it will be deleted.
+        '''
         last_np_msg = self.server_specific_data[guild]['last_np_msg']
         if last_np_msg is None:
             return
         await self.safe_delete_message(last_np_msg)
         self.server_specific_data[guild]['last_np_msg'] = None
 
-    def get_prog_bar(self, player, streaming):
+    def get_prog_bar(self, player, streaming: bool):
+        '''Gets the progress related strings'''
         # TODO: Fix timedelta garbage with util function
         song_progress = ftimedelta(timedelta(seconds=player.progress))
         song_total = ftimedelta(timedelta(seconds=player.current_entry.duration))
@@ -28,15 +35,14 @@ class NowPlayingCog(Cog):
         prog_str = ('`[{progress}]`' if streaming else '`[{progress}/{total}]`').format(
             progress=song_progress, total=song_total
         )
-        prog_bar_str = ''
 
         # percentage shows how much of the current song has already been played
-        percentage = 0.0
-        if player.current_entry.duration > 0:
-            percentage = player.progress / player.current_entry.duration
+        percentage = 0 if player.current_entry.duration == 0 \
+                     else player.progress / player.current_entry.duration
 
         # create the actual bar
         progress_bar_length = 30
+        prog_bar_str = ''
         for i in range(progress_bar_length):
             prog_bar_str += '□' if percentage < 1 / progress_bar_length * i else '■'
 
@@ -46,6 +52,7 @@ class NowPlayingCog(Cog):
         description='Sends message specifying which entry is currently playing and how long it will last'
     )
     async def now_playing(self, context: Context):
+        '''Sends message specifying which entry is currently playing and how long it will last'''
         player = await self._get_player(context.channel)
         if not player.current_entry:
             error_msg = self.str.get(
