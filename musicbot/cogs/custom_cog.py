@@ -3,7 +3,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import TYPE_CHECKING
 
-from discord.abc import GuildChannel
+from discord import Guild
 from discord.ext.commands import Cog
 
 from ..player import MusicPlayer
@@ -53,6 +53,19 @@ class CustomCog(Cog):
     @property
     def downloader(self):
         return self.bot.downloader
+
+    async def check_last_msg(self, guild: Guild):
+        '''
+        Checks the last message send to the specified guild, if it exists then
+        it will be deleted.
+        '''
+        if not self.config.delete_nowplaying:
+            return
+        last_np_msg = self.server_specific_data[guild]['last_np_msg']
+        if last_np_msg is None:
+            return
+        await self.safe_delete_message(last_np_msg)
+        self.server_specific_data[guild]['last_np_msg'] = None
 
     def _get_cog(self, cog_name: str):
         cog = self.bot.get_cog(cog_name)

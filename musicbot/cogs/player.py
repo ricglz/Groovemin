@@ -299,94 +299,92 @@ class PlayerCog(Cog):
 
         return sum(1 for m in v_channel.members if check(m)) == 0
 
+    def _autopause(self, player):
+        if self._check_if_empty(player.voice_client.channel):
+            log.info("Player finished playing, autopaused in empty channel")
+            player.pause()
+            self.server_specific_data[player.voice_client.channel.guild]['auto_paused'] = True
+
+    def _ensure_filled_autoplaylist(self, player):
+        if not player.autoplaylist:
+            if not self.autoplaylist:
+                log.warning("No playable songs in the autoplaylist, disabling.")
+                self.config.auto_playlist = False
+            else:
+                log.debug("No content in current autoplaylist. Filling with new music...")
+                player.autoplaylist = list(self.autoplaylist)
+        return player
+
+    async def _handle_auto_playlist(self, player):
+        player = self._ensure_filled_autoplaylist(player)
+
+        while player.autoplaylist:
+            if self.config.auto_playlist_random:
+                random.shuffle(player.autoplaylist)
+                song_url = random.choice(player.autoplaylist)
+            else:
+                song_url = player.autoplaylist[0]
+            player.autoplaylist.remove(song_url)
+
+            info = {}
+
+            try:
+                info = await self.downloader.extract_info(
+                    player.playlist.loop,
+                    song_url,
+                    download=False,
+                    process=False
+                )
+            except DownloadError as e:
+                if 'YouTube said:' in e.args[0]:
+                    # url is bork, remove from list and put in removed list
+                    log.error("Error processing youtube url:\n{}".format(e.args[0]))
+
+                else:
+                    # Probably an error from a different extractor, but I've only seen youtube's
+                    log.error("Error processing \"{url}\": {ex}".format(url=song_url, ex=e))
+
+                await self.remove_from_autoplaylist(song_url, ex=e, delete_from_ap=self.config.remove_ap)
+                continue
+
+            except Exception as e:
+                log.error("Error processing \"{url}\": {ex}".format(url=song_url, ex=e))
+                log.exception()
+
+                self.autoplaylist.remove(song_url)
+                continue
+
+            if info.get('entries', None):  # or .get('_type', '') == 'playlist'
+                log.debug("Playlist found but is unsupported at this time, skipping.")
+                # TODO: Playlist expansion
+
+            # Do I check the initial conditions again? not (not
+            # player.playlist.entries and not player.current_entry and
+            # self.config.auto_playlist)
+            if self.config.auto_pause:
+                player.once('play', lambda player, **_: self._autopause(player))
+
+            try:
+                await player.playlist.add_entry(song_url, info, channel=None, author=None)
+            except ExtractionError as e:
+                log.error("Error adding song from autoplaylist: {}".format(e))
+                log.debug('', exc_info=True)
+                continue
+
+            break
+
+        if not self.autoplaylist:
+            # TODO: When I add playlist expansion, make sure that's not happening during this check
+            log.warning("No playable songs in the autoplaylist, disabling.")
+            self.config.auto_playlist = False
+
     async def on_player_finished_playing(self, player, **_):
         log.debug('Running on_player_finished_playing')
 
-        # delete last_np_msg somewhere if we have cached it
-        if self.config.delete_nowplaying:
-            guild = player.voice_client.guild
-            last_np_msg = self.server_specific_data[guild]['last_np_msg']
-
-            if last_np_msg:
-                await self.safe_delete_message(last_np_msg)
-
-        def _autopause(player):
-            if self._check_if_empty(player.voice_client.channel):
-                log.info("Player finished playing, autopaused in empty channel")
-
-                player.pause()
-                self.server_specific_data[player.voice_client.channel.guild]['auto_paused'] = True
+        self.check_last_msg(player.voice_client.guild)
 
         if not player.playlist.entries and not player.current_entry and self.config.auto_playlist:
-            if not player.autoplaylist:
-                if not self.autoplaylist:
-                    # TODO: When I add playlist expansion, make sure that's not happening during this check
-                    log.warning("No playable songs in the autoplaylist, disabling.")
-                    self.config.auto_playlist = False
-                else:
-                    log.debug("No content in current autoplaylist. Filling with new music...")
-                    player.autoplaylist = list(self.autoplaylist)
-
-            while player.autoplaylist:
-                if self.config.auto_playlist_random:
-                    random.shuffle(player.autoplaylist)
-                    song_url = random.choice(player.autoplaylist)
-                else:
-                    song_url = player.autoplaylist[0]
-                player.autoplaylist.remove(song_url)
-
-                info = {}
-
-                try:
-                    info = await self.downloader.extract_info(
-                        player.playlist.loop,
-                        song_url,
-                        download=False,
-                        process=False
-                    )
-                except DownloadError as e:
-                    if 'YouTube said:' in e.args[0]:
-                        # url is bork, remove from list and put in removed list
-                        log.error("Error processing youtube url:\n{}".format(e.args[0]))
-
-                    else:
-                        # Probably an error from a different extractor, but I've only seen youtube's
-                        log.error("Error processing \"{url}\": {ex}".format(url=song_url, ex=e))
-
-                    await self.remove_from_autoplaylist(song_url, ex=e, delete_from_ap=self.config.remove_ap)
-                    continue
-
-                except Exception as e:
-                    log.error("Error processing \"{url}\": {ex}".format(url=song_url, ex=e))
-                    log.exception()
-
-                    self.autoplaylist.remove(song_url)
-                    continue
-
-                if info.get('entries', None):  # or .get('_type', '') == 'playlist'
-                    log.debug("Playlist found but is unsupported at this time, skipping.")
-                    # TODO: Playlist expansion
-
-                # Do I check the initial conditions again?
-                # not (not player.playlist.entries and not player.current_entry and self.config.auto_playlist)
-
-                if self.config.auto_pause:
-                    player.once('play', lambda player, **_: _autopause(player))
-
-                try:
-                    await player.playlist.add_entry(song_url, info, channel=None, author=None)
-                except ExtractionError as e:
-                    log.error("Error adding song from autoplaylist: {}".format(e))
-                    log.debug('', exc_info=True)
-                    continue
-
-                break
-
-            if not self.autoplaylist:
-                # TODO: When I add playlist expansion, make sure that's not happening during this check
-                log.warning("No playable songs in the autoplaylist, disabling.")
-                self.config.auto_playlist = False
-
+            await self._handle_auto_playlist(player)
         else: # Don't serialize for autoplaylist events
             await self.serialize_queue(player.voice_client.channel.guild)
 

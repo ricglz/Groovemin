@@ -15,17 +15,6 @@ log = logging.getLogger(__name__)
 
 class NowPlayingCog(Cog):
     '''Cog class in charge of the now_playing command'''
-    async def check_last_msg(self, guild: Guild):
-        '''
-        Checks the last message send to the specified guild, if it exists then
-        it will be deleted.
-        '''
-        last_np_msg = self.server_specific_data[guild]['last_np_msg']
-        if last_np_msg is None:
-            return
-        await self.safe_delete_message(last_np_msg)
-        self.server_specific_data[guild]['last_np_msg'] = None
-
     def get_prog_bar(self, player, streaming: bool):
         '''Gets the progress related strings'''
         # TODO: Fix timedelta garbage with util function
