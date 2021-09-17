@@ -373,7 +373,7 @@ class PlayCog(CustomCog):
         procmsg = self.str.get(
             'cmd-play-spotify-album-process', 'Processing album `{0}` (`{1}`)'
         ).format(res["name"], play_req.song_url)
-        procmsg = await self.safe_send_message(channel, procmsg)
+        procmsg = await self.safe_send_message(context, procmsg)
 
         items = res['tracks']['items']
         if play_req.shuffle:
@@ -407,7 +407,7 @@ class PlayCog(CustomCog):
             'cmd-play-spotify-playlist-process',
             'Processing playlist `{0}` (`{1}`)'
         ).format(parts[-1], play_req.song_url)
-        procmsg = await self.safe_send_message(channel, procmsg)
+        procmsg = await self.safe_send_message(context, procmsg)
 
         if play_req.shuffle:
             shuffle(res)
