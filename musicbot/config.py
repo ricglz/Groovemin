@@ -3,12 +3,23 @@ import sys
 import codecs
 import shutil
 import logging
-import configparser
+from configparser import ConfigParser
 
 from .exceptions import HelpfulError
 
 log = logging.getLogger(__name__)
 
+def check_confsections(config: ConfigParser):
+    confsections = {"Credentials", "Permissions", "Chat", "MusicBot"}.difference(config.sections())
+    if confsections:
+        raise HelpfulError(
+            "One or more required config sections are missing.",
+            "Fix your config.  Each [Section] should be on its own line with "
+            "nothing else on it.  The following sections are missing: {}".format(
+                ', '.join(['[%s]' % s for s in confsections])
+            ),
+            preface="An error has occurred parsing the config:\n"
+        )
 
 class Config:
     # noinspection PyUnresolvedReferences
@@ -16,22 +27,12 @@ class Config:
         self.config_file = config_file
         self.find_config()
 
-        config = configparser.ConfigParser(interpolation=None)
+        config = ConfigParser(interpolation=None)
         config.read(config_file, encoding='utf-8')
+        check_confsections(config)
 
-        confsections = {"Credentials", "Permissions", "Chat", "MusicBot"}.difference(config.sections())
-        if confsections:
-            raise HelpfulError(
-                "One or more required config sections are missing.",
-                "Fix your config.  Each [Section] should be on its own line with "
-                "nothing else on it.  The following sections are missing: {}".format(
-                    ', '.join(['[%s]' % s for s in confsections])
-                ),
-                preface="An error has occured parsing the config:\n"
-            )
-
-        self._confpreface = "An error has occured reading the config:\n"
-        self._confpreface2 = "An error has occured validating the config:\n"
+        self._confpreface = "An error has occurred reading the config:\n"
+        self._confpreface2 = "An error has occurred validating the config:\n"
 
         self._login_token = config.get('Credentials', 'Token', fallback=ConfigDefaults.token)
 
@@ -110,7 +111,7 @@ class Config:
         exfile = 'config/example_options.ini'
         if os.path.isfile(exfile):
             usr_keys = self.get_all_keys(conf)
-            exconf = configparser.ConfigParser(interpolation=None)
+            exconf = ConfigParser(interpolation=None)
             if not exconf.read(exfile, encoding='utf-8'):
                 return
             ex_keys = self.get_all_keys(exconf)
@@ -275,7 +276,7 @@ class Config:
 
 
     def find_config(self):
-        config = configparser.ConfigParser(interpolation=None)
+        config = ConfigParser(interpolation=None)
 
         if not os.path.isfile(self.config_file):
             if os.path.isfile(self.config_file + '.ini'):
@@ -296,7 +297,7 @@ class Config:
                 )
 
         if not config.read(self.config_file, encoding='utf-8'):
-            c = configparser.ConfigParser()
+            c = ConfigParser()
             try:
                 # load the config again and check to see if the user edited that one
                 c.read(self.config_file, encoding='utf-8')
