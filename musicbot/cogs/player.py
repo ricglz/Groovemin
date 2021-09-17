@@ -68,6 +68,7 @@ class PlayerCog(Cog):
         guild = channel.guild
 
         if guild.id in self.players:
+            log.debug('Used cached player')
             return self.players[guild.id]
 
         async with self.aiolocks[_func_() + ':' + str(guild.id)]:
@@ -90,11 +91,13 @@ class PlayerCog(Cog):
                     'The bot is not in a voice channel.  '
                     'Use %ssummon to summon it to your voice channel.' % self.config.command_prefix)
 
+            log.debug('Will create new player')
             voice_client = await self.get_voice_client(channel)
 
             playlist = Playlist(self.bot)
             player = MusicPlayer(self.bot, voice_client, playlist)
-            self._init_player(player, guild=guild)
+            return self._init_player(player, guild=guild)
+
 
     def _init_player(self, player, *, guild=None):
         player = player.on('play', self.on_player_play) \
