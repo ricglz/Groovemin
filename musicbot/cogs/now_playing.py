@@ -99,4 +99,4 @@ class NowPlayingCog(Cog):
             )
 
         self.server_specific_data[guild]['last_np_msg'] = \
-            await self.safe_send_message(context.channel, np_text)
+            await self.safe_send_message(context, np_text)
