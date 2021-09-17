@@ -56,7 +56,7 @@ class MusicPlayer(EventEmitter, Serializable):
     _source = None
     _stderr_future: Optional[asyncio.Future] = None
     autoplaylist: Optional[list] = None
-    karaoke_model = False
+    karaoke_mode = False
     skip_state = None
 
     def __init__(self, bot: Bot, voice_client: VoiceChannel, playlist: Playlist):
@@ -134,7 +134,7 @@ class MusicPlayer(EventEmitter, Serializable):
         self._events.clear()
         self._kill_current_player()
 
-    def _playback_finished(self):
+    def _playback_finished(self, _error):
         entry = self._current_entry
 
         if self._current_player:

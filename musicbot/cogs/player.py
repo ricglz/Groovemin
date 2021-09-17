@@ -381,7 +381,7 @@ class PlayerCog(Cog):
     async def on_player_finished_playing(self, player, **_):
         log.debug('Running on_player_finished_playing')
 
-        self.check_last_msg(player.voice_client.guild)
+        await self.check_last_msg(player.voice_client.guild)
 
         if not player.playlist.entries and not player.current_entry and self.config.auto_playlist:
             await self._handle_auto_playlist(player)
