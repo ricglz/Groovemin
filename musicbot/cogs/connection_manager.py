@@ -69,7 +69,7 @@ class ConnectionManagerCog(Cog):
         await self.safe_send_message(context, msg)
 
     async def _initialize_player(self, author: Member):
-        player_cog = self.g_et_player_cog()
+        player_cog = self._get_player_cog()
         player = await player_cog.get_player(
             author.voice.channel, create=True, deserialize=self.config.persistent_queue
         )
