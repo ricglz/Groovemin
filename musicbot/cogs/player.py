@@ -283,6 +283,22 @@ class PlayerCog(Cog):
                 log.info("Updating autoplaylist")
                 write_file(self.config.auto_playlist_file, self.autoplaylist)
 
+    @staticmethod
+    def _check_if_empty(v_channel: GuildChannel, *, excluding_me=True, excluding_deaf=False):
+        def check(member):
+            member_is_me = excluding_me and member == v_channel.guild.me
+            member_is_deaf = excluding_deaf and any([member.deaf, member.self_deaf])
+            member_is_other_bot = member.bot
+
+            log.debug(
+                'Check if empty %s, %s, %s, %s',
+                member, member_is_me, member_is_deaf, member_is_other_bot
+            )
+
+            return not (member_is_me or member_is_deaf or member_is_other_bot)
+
+        return sum(1 for m in v_channel.members if check(m)) == 0
+
     async def on_player_finished_playing(self, player, **_):
         log.debug('Running on_player_finished_playing')
 

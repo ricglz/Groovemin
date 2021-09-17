@@ -54,17 +54,6 @@ class CustomCog(Cog):
     def downloader(self):
         return self.bot.downloader
 
-    @staticmethod
-    def _check_if_empty(v_channel: GuildChannel, *, excluding_me=True, excluding_deaf=False):
-        def check(member):
-            member_is_me = excluding_me and member == v_channel.guild.me
-            member_is_deaf = excluding_deaf and any([member.deaf, member.self_deaf])
-            member_is_other_bot = member.bot
-
-            return not (member_is_me or member_is_deaf or member_is_other_bot)
-
-        return sum(1 for m in v_channel.members if check(m)) == 0
-
     def _get_cog(self, cog_name: str):
         cog = self.bot.get_cog(cog_name)
         if cog is None:
