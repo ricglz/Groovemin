@@ -1,3 +1,4 @@
+'''Play Cog module'''
 from dataclasses import dataclass
 from random import shuffle
 from typing import Optional
@@ -25,6 +26,7 @@ LINKS_REGEX = '((http(s)*:[/][/]|www.)([a-z]|[A-Z]|[0-9]|[/.]|[~])*)'
 PLAYLIST_REGEX = r'watch\?v=.+&(list=[^&]+)'
 
 def parse_song_url(song_query: str):
+    '''Given a song query it sanitizes it, in case that is a url'''
     song_url = song_query.strip('<>')
     # Make sure forward slashes work properly in search queries
     pattern = re.compile(LINKS_REGEX)
@@ -38,6 +40,7 @@ def parse_song_url(song_query: str):
     return song_url
 
 def parser_song_url_spotify(song_url: str):
+    '''Sanitizes a song url to be used in the case that is a spotify url'''
     if 'open.spotify.com' in song_url:
         regex_result = re.sub(r'(http[s]?:\/\/)?(open.spotify.com)\/', '', song_url)
         regex_result = regex_result.replace('/', ':')
@@ -47,6 +50,7 @@ def parser_song_url_spotify(song_url: str):
 
 @dataclass
 class PlayRequirements:
+    '''Helper class to contain the required arguments for play functions'''
     author: Member
     channel: object
     permissions: Permissions
@@ -55,6 +59,7 @@ class PlayRequirements:
     song_url: str
 
 class PlayCog(CustomCog):
+    '''Cog class in charge of the main play command'''
     def __init__(self, bot):
         super().__init__(bot)
         self.spotify = None
@@ -71,11 +76,11 @@ class PlayCog(CustomCog):
                     self.config._spotify = False
                 else:
                     log.info('Authenticated with Spotify successfully using client ID and secret.')
-            except SpotifyError as e:
+            except SpotifyError as err:
                 log.warning(
                     'There was a problem initializing the connection to Spotify. Is your client '
                     'ID and secret correct? Details: %s. Continuing anyway in 5 seconds...',
-                    e
+                    err
                 )
                 self.config._spotify = False
                 time.sleep(5)
@@ -104,28 +109,27 @@ class PlayCog(CustomCog):
                 except:
                     info_process = None
 
-
                 if info_process is None or info is None:
                     break
 
-                if info_process.get('_type', None) == 'playlist' \
-                   and 'entries' not in info \
-                   and not info.get('url', '').startswith('ytsearch'):
-                    use_url = info_process.get('webpage_url', None) or info_process.get('url', None)
-                    if use_url == song_url:
-                        log.warning(
-                            'Determined incorrect entry type, but suggested url is the same. Help.')
-
-                        # If we break here it will break things down the line
-                        # and give "This is a playlist" exception as a result
-                        break
-
-                    log.debug(
-                        'Assumed url "%s" was a single entry, was actually a playlist', song_url)
-                    log.debug('Using "%s" instead', use_url)
-                    song_url = use_url
-                else:
+                is_not_playlist = info_process.get('_type', None) != 'playlist'
+                has_entries = 'entries' in info
+                is_search_url = info.get('url', '').startswith('ytsearch')
+                if is_not_playlist or has_entries or is_search_url:
                     break
+                use_url = info_process.get('webpage_url', None) or info_process.get('url', None)
+                if use_url == song_url:
+                    log.warning(
+                        'Determined incorrect entry type, but suggested url is the same. Help.'
+                    )
+                    # If we break here it will break things down the line
+                    # and give "This is a playlist" exception as a result
+                    break
+
+                log.debug(
+                    'Assumed url "%s" was a single entry, was actually a playlist', song_url)
+                log.debug('Using "%s" instead', use_url)
+                song_url = use_url
 
             except Exception as e:
                 if 'unknown url type' in str(e):
@@ -147,8 +151,8 @@ class PlayCog(CustomCog):
            player.playlist.count_for_user(author) >= permissions.max_songs:
             error_msg = self.str.get(
                 'cmd-play-limit',
-                f'You have reached your enqueued song limit ({permissions.max_songs})'
-            )
+                'You have reached your enqueued song limit ({0})'
+            ).format(permissions.max_songs)
             raise PermissionsError(error_msg, expire_in=30)
 
         if player.karaoke_mode and not permissions.bypass_karaoke_mode:
@@ -162,8 +166,8 @@ class PlayCog(CustomCog):
         if not info:
             error_msg = self.str.get(
                 'cmd-play-noinfo',
-                f'That video cannot be played. Try using the {self.config.command_prefix}stream command.'
-            )
+                'That video cannot be played. Try using the {0}stream command.'
+            ).format(self.config.command_prefix)
             raise CommandError(error_msg, expire_in=30)
 
         if info.get('extractor', '') not in permissions.extractors and permissions.extractors:
@@ -184,7 +188,9 @@ class PlayCog(CustomCog):
             download=False,
             process=True,
             on_error=lambda e: asyncio.ensure_future(
-                self.safe_send_message(channel, "```\n%s\n```" % e, expire_in=120), loop=self.bot.loop),
+                self.safe_send_message(channel, "```\n%s\n```" % e, expire_in=120),
+                loop=self.bot.loop
+            ),
             retry_on_error=True
         )
 
@@ -199,23 +205,25 @@ class PlayCog(CustomCog):
             )
 
         if not all(info.get('entries', [])):
-            # empty list, no data
             log.debug("Got empty list, no data")
             return None, None
 
         # TODO: handle 'webpage_url' being 'ytsearch:...' or extractor type
         song_url = info['entries'][0]['webpage_url']
-        info = await self.downloader.extract_info(player.playlist.loop, song_url, download=False, process=False)
+        info = await self.downloader.extract_info(
+            player.playlist.loop, song_url, download=False, process=False
+        )
 
         return song_url, info
 
     async def _send_playlist_gathering_msg(self, num_songs: int, wait_per_song: float, channel):
         eta = fixg(num_songs * wait_per_song)
-        eta_msg = self.str.get('cmd-play-playlist-gathering-2', f', ETA: {eta} seconds') \
+        eta_msg = self.str.get('cmd-play-playlist-gathering-2', ', ETA: {0} seconds').format(eta) \
                   if num_songs >= 10 else '.'
         safe_msg = self.str.get(
             'cmd-play-playlist-gathering-1',
-            f'Gathering playlist information for {num_songs} songs{eta_msg}')
+            'Gathering playlist information for {0} songs{1}'
+        ).format(num_songs, eta_msg)
         return await self.safe_send_message(channel, safe_msg)
 
     async def _handle_entries(self, play_req: PlayRequirements, info):
@@ -225,8 +233,6 @@ class PlayCog(CustomCog):
         player = play_req.player
 
         await self._do_playlist_checks(permissions, player, author, info['entries'])
-
-        num_songs = sum(1 for _ in info['entries'])
 
         if info['extractor'].lower() in ['youtube:playlist', 'soundcloud:set', 'bandcamp:album']:
             try:
@@ -243,7 +249,8 @@ class PlayCog(CustomCog):
             except Exception as e:
                 log.error("Error queuing playlist", exc_info=True)
                 error_msg = self.str.get(
-                    'cmd-play-playlist-error', f"Error queuing playlist:\n`{e}`")
+                    'cmd-play-playlist-error', 'Error queuing playlist:\n`{0}`'
+                ).format(e)
                 raise CommandError(error_msg, expire_in=30) from e
 
         t0 = time.time()
@@ -256,6 +263,7 @@ class PlayCog(CustomCog):
         # get the speed from that Different playlists might download at
         # different speeds though
         wait_per_song = 1.2
+        num_songs = sum(1 for _ in info['entries'])
 
         procmesg = await self._send_playlist_gathering_msg(num_songs, wait_per_song, channel)
 
@@ -302,7 +310,10 @@ class PlayCog(CustomCog):
 
         if not listlen - drop_count:
             raise CommandError(
-                self.str.get('cmd-play-playlist-maxduration', "No songs were added, all songs were over max duration (%ss)") % permissions.max_song_length,
+                self.str.get(
+                    'cmd-play-playlist-maxduration',
+                    "No songs were added, all songs were over max duration (%ss)"
+                ) % permissions.max_song_length,
                 expire_in=30
             )
 
