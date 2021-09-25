@@ -311,6 +311,7 @@ class URLPlaylistEntry(BasePlaylistEntry):
                 os.rename(unhashed_fname, self.filename)
 
 class StreamPlaylistEntry(BasePlaylistEntry):
+    '''Class that handles entries that are of streams'''
     def __init__(self, playlist, url, title, *, destination=None, **meta):
         super().__init__(playlist, url, title, 0, **meta)
         self.destination = destination
@@ -359,12 +360,14 @@ class StreamPlaylistEntry(BasePlaylistEntry):
         url = self.destination if fallback else self.url
 
         try:
-            result = await self.playlist.downloader.extract_info(self.playlist.loop, url, download=False)
-        except Exception as e:
+            result = await self.playlist.downloader.extract_info(
+                self.playlist.loop, url, download=False
+            )
+        except Exception as err:
             if not fallback and self.destination:
                 return await self._download(fallback=True)
 
-            raise ExtractionError(e)
+            raise ExtractionError(err) from err
         else:
             self.filename = result['url']
             # I might need some sort of events or hooks or shit
