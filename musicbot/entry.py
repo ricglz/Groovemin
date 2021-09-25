@@ -79,8 +79,19 @@ class BasePlaylistEntry(Serializable):
     def __hash__(self):
         return id(self)
 
+    @classmethod
+    def _get_meta(cls, data: dict, playlist: Playlist):
+        meta = {}
+        # TODO: Better [name] fallbacks
+        if 'channel' in data['meta']:
+            channel = playlist.bot.get_channel(data['meta']['channel']['id'])
+            meta['channel'] = channel or data['meta']['channel']['name']
+        if 'author' in data['meta']:
+            meta['author'] = meta['channel'].guild.get_member(data['meta']['author']['id'])
+        return meta
 
 class URLPlaylistEntry(BasePlaylistEntry):
+    '''Class for managing url entries'''
     aoptions = '-vn'
 
     def __init__(self, playlist, url, title, duration=0, expected_filename=None, **meta):
@@ -110,7 +121,7 @@ class URLPlaylistEntry(BasePlaylistEntry):
         })
 
     @classmethod
-    def _deserialize(cls, data, playlist=None):
+    def _deserialize(cls, data, playlist: Optional[Playlist]=None):
         assert playlist is not None, cls._bad('playlist')
 
         try:
@@ -121,28 +132,65 @@ class URLPlaylistEntry(BasePlaylistEntry):
             downloaded = data['downloaded'] if playlist.bot.config.save_videos else False
             filename = data['filename'] if downloaded else None
             expected_filename = data['expected_filename']
-            meta = {}
-
-            # TODO: Better [name] fallbacks
-            if 'channel' in data['meta']:
-                # int() it because persistent queue from pre-rewrite days saved ids as strings
-                meta['channel'] = playlist.bot.get_channel(int(data['meta']['channel']['id']))
-                if not meta['channel']:
-                    log.warning('Cannot find channel in an entry loaded from persistent queue. Chennel id: {}'.format(data['meta']['channel']['id']))
-                    meta.pop('channel')
-                elif 'author' in data['meta']:
-                    # int() it because persistent queue from pre-rewrite days saved ids as strings
-                    meta['author'] = meta['channel'].guild.get_member(int(data['meta']['author']['id']))
-                    if not meta['author']:
-                        log.warning('Cannot find author in an entry loaded from persistent queue. Author id: {}'.format(data['meta']['author']['id']))
-                        meta.pop('author')
-
+            meta = cls._get_meta(data, playlist)
             entry = cls(playlist, url, title, duration, expected_filename, **meta)
             entry.filename = filename
-
             return entry
         except Exception as e:
-            log.error("Could not load {}".format(cls.__name__), exc_info=e)
+            log.error("Could not load %s", cls.__name__, exc_info=e)
+
+    async def _download_generic_extractor(self):
+        flistdir = [f.rsplit('-', 1)[0] for f in os.listdir(self.download_folder)]
+        expected_fname_noex, fname_ex = os.path.basename(self.expected_filename).rsplit('.', 1)
+
+        if expected_fname_noex in flistdir:
+            try:
+                rsize = int(await get_header(self.playlist.bot.aiosession, self.url, 'CONTENT-LENGTH'))
+            except:
+                rsize = 0
+
+            lfile = os.path.join(
+                self.download_folder,
+                os.listdir(self.download_folder)[flistdir.index(expected_fname_noex)]
+            )
+
+            # print("Resolved %s to %s" % (self.expected_filename, lfile))
+            lsize = os.path.getsize(lfile)
+            # print("Remote size: %s Local size: %s" % (rsize, lsize))
+
+            if lsize != rsize:
+                await self._really_download(perform_hash=True)
+            else:
+                # print("[Download] Cached:", self.url)
+                self.filename = lfile
+
+        else:
+            # print("File not found in cache (%s)" % expected_fname_noex)
+            await self._really_download(perform_hash=True)
+
+    async def _download_other_extractor(self):
+        ldir = os.listdir(self.download_folder)
+        flistdir = [f.rsplit('.', 1)[0] for f in ldir]
+        expected_fname_base = os.path.basename(self.expected_filename)
+        expected_fname_noex = expected_fname_base.rsplit('.', 1)[0]
+
+        # idk wtf this is but its probably legacy code
+        # or i have youtube to blame for changing shit again
+        if expected_fname_base in ldir:
+            log.info("Download cached: %s", self.url)
+            self.filename = os.path.join(self.download_folder, expected_fname_base)
+        elif expected_fname_noex in flistdir:
+            log.info("Download cached (different extension): %s", self.url)
+            self.filename = os.path.join(
+                self.download_folder, ldir[flistdir.index(expected_fname_noex)]
+            )
+            log.debug(
+                "Expected %s, got %s",
+                self.expected_filename.rsplit('.', 1)[-1],
+                self.filename.rsplit('.', 1)[-1]
+            )
+        else:
+            await self._really_download()
 
     # noinspection PyTypeChecker
     async def _download(self):
@@ -150,74 +198,24 @@ class URLPlaylistEntry(BasePlaylistEntry):
             return
 
         self._is_downloading = True
+        if not os.path.exists(self.download_folder):
+            os.makedirs(self.download_folder)
+        extractor = os.path.basename(self.expected_filename).split('-')[0]
         try:
-            # Ensure the folder that we're going to move into exists.
-            if not os.path.exists(self.download_folder):
-                os.makedirs(self.download_folder)
-
-            # self.expected_filename: audio_cache\youtube-9R8aSKwTEMg-NOMA_-_Brain_Power.m4a
-            extractor = os.path.basename(self.expected_filename).split('-')[0]
-
             # the generic extractor requires special handling
             if extractor == 'generic':
-                flistdir = [f.rsplit('-', 1)[0] for f in os.listdir(self.download_folder)]
-                expected_fname_noex, fname_ex = os.path.basename(self.expected_filename).rsplit('.', 1)
-
-                if expected_fname_noex in flistdir:
-                    try:
-                        rsize = int(await get_header(self.playlist.bot.aiosession, self.url, 'CONTENT-LENGTH'))
-                    except:
-                        rsize = 0
-
-                    lfile = os.path.join(
-                        self.download_folder,
-                        os.listdir(self.download_folder)[flistdir.index(expected_fname_noex)]
-                    )
-
-                    # print("Resolved %s to %s" % (self.expected_filename, lfile))
-                    lsize = os.path.getsize(lfile)
-                    # print("Remote size: %s Local size: %s" % (rsize, lsize))
-
-                    if lsize != rsize:
-                        await self._really_download(hash=True)
-                    else:
-                        # print("[Download] Cached:", self.url)
-                        self.filename = lfile
-
-                else:
-                    # print("File not found in cache (%s)" % expected_fname_noex)
-                    await self._really_download(hash=True)
-
+                await self._download_generic_extractor()
             else:
-                ldir = os.listdir(self.download_folder)
-                flistdir = [f.rsplit('.', 1)[0] for f in ldir]
-                expected_fname_base = os.path.basename(self.expected_filename)
-                expected_fname_noex = expected_fname_base.rsplit('.', 1)[0]
-
-                # idk wtf this is but its probably legacy code
-                # or i have youtube to blame for changing shit again
-
-                if expected_fname_base in ldir:
-                    self.filename = os.path.join(self.download_folder, expected_fname_base)
-                    log.info("Download cached: {}".format(self.url))
-
-                elif expected_fname_noex in flistdir:
-                    log.info("Download cached (different extension): {}".format(self.url))
-                    self.filename = os.path.join(self.download_folder, ldir[flistdir.index(expected_fname_noex)])
-                    log.debug("Expected {}, got {}".format(
-                        self.expected_filename.rsplit('.', 1)[-1],
-                        self.filename.rsplit('.', 1)[-1]
-                    ))
-                else:
-                    await self._really_download()
+                await self._download_other_extractor()
 
             if self.playlist.bot.config.use_experimental_equalization:
                 try:
-                    mean, maximum = await self.get_mean_volume(self.filename)
+                    _, maximum = await self.get_mean_volume(self.filename)
                     aoptions = '-af "volume={}dB"'.format((maximum * -1))
                 except Exception as e:
-                    log.error('There as a problem with working out EQ, likely caused by a strange installation of FFmpeg. '
-                              'This has not impacted the ability for the bot to work, but will mean your tracks will not be equalised.')
+                    log.error('There as a problem with working out EQ, likely caused by a strange '
+                              'installation of FFmpeg. This has not impacted the ability for the '
+                              'bot to work, but will mean your tracks will not be equalised.')
                     aoptions = "-vn"
             else:
                 aoptions = "-vn"
@@ -235,12 +233,16 @@ class URLPlaylistEntry(BasePlaylistEntry):
             self._is_downloading = False
 
     async def run_command(self, cmd):
-        p = await asyncio.create_subprocess_shell(cmd, stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.PIPE)
-        log.debug('Starting asyncio subprocess ({0}) with command: {1}'.format(p, cmd))
-        stdout, stderr = await p.communicate()
+        '''Runs shell command asynchronously'''
+        process = await asyncio.create_subprocess_shell(
+            cmd, stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.PIPE
+        )
+        log.debug('Starting asyncio subprocess (%s) with command: %s', process, cmd)
+        stdout, stderr = await process.communicate()
         return stdout + stderr
 
     def get(self, program):
+        '''Gets program binary filepath'''
         def is_exe(fpath):
             found = os.path.isfile(fpath) and os.access(fpath, os.X_OK)
             if not found and sys.platform == 'win32':
@@ -261,40 +263,35 @@ class URLPlaylistEntry(BasePlaylistEntry):
 
         return None
 
-    async def get_mean_volume(self, input_file):
-        log.debug('Calculating mean volume of {0}'.format(input_file))
-        cmd = '"' + self.get('ffmpeg') + '" -i "' + input_file + '" -af "volumedetect" -f null /dev/null'
-        output = await self.run_command(cmd)
-        output = output.decode("utf-8")
-        # print('----', output)
+    async def get_mean_volume(self, input_file: str):
+        '''Gets the mean volume of the given audio file.'''
+        log.debug('Calculating mean volume of %s', input_file)
+        cmd = '"' + self.get('ffmpeg') + '" -i "' + input_file
+        cmd += '" -af "volumedetect" -f null /dev/null'
+        output = (await self.run_command(cmd)).decode("utf-8")
+
         mean_volume_matches = re.findall(r"mean_volume: ([\-\d\.]+) dB", output)
-        if (mean_volume_matches):
-            mean_volume = float(mean_volume_matches[0])
-        else:
-            mean_volume = float(0)
-
+        mean_volume = float(mean_volume_matches[0] if mean_volume_matches else 0)
         max_volume_matches = re.findall(r"max_volume: ([\-\d\.]+) dB", output)
-        if (max_volume_matches):
-            max_volume = float(max_volume_matches[0])
-        else:
-            max_volume = float(0)
+        max_volume = float(max_volume_matches[0] if max_volume_matches else 0)
 
-        log.debug('Calculated mean volume as {0}'.format(mean_volume))
+        log.debug('Calculated mean volume as %s', mean_volume)
         return mean_volume, max_volume
 
     # noinspection PyShadowingBuiltins
-    async def _really_download(self, *, hash=False):
-        log.info("Download started: {}".format(self.url))
+    async def _really_download(self, *, perform_hash=False):
+        log.info("Download started: %s", self.url)
 
-        retry = True
-        while retry:
-            try:
-                result = await self.playlist.downloader.extract_info(self.playlist.loop, self.url, download=True)
-                break
-            except Exception as e:
-                raise ExtractionError(e)
+        try:
+            result = await self.playlist.downloader.extract_info(
+                self.playlist.loop,
+                self.url,
+                download=True
+            )
+        except Exception as err:
+            raise ExtractionError(err) from err
 
-        log.info("Download complete: {}".format(self.url))
+        log.info("Download complete: %s", self.url)
 
         if result is None:
             log.critical("YTDL has failed, everyone panic")
@@ -303,17 +300,15 @@ class URLPlaylistEntry(BasePlaylistEntry):
 
         self.filename = unhashed_fname = self.playlist.downloader.ytdl.prepare_filename(result)
 
-        if hash:
+        if perform_hash:
             # insert the 8 last characters of the file hash to the file name to ensure uniqueness
             self.filename = md5sum(unhashed_fname, 8).join('-.').join(unhashed_fname.rsplit('.', 1))
-
             if os.path.isfile(self.filename):
                 # Oh bother it was actually there.
                 os.unlink(unhashed_fname)
             else:
                 # Move the temporary file to it's final location.
                 os.rename(unhashed_fname, self.filename)
-
 
 class StreamPlaylistEntry(BasePlaylistEntry):
     def __init__(self, playlist, url, title, *, destination=None, **meta):
@@ -348,23 +343,14 @@ class StreamPlaylistEntry(BasePlaylistEntry):
             title = data['title']
             destination = data['destination']
             filename = data['filename']
-            meta = {}
-
-            # TODO: Better [name] fallbacks
-            if 'channel' in data['meta']:
-                ch = playlist.bot.get_channel(data['meta']['channel']['id'])
-                meta['channel'] = ch or data['meta']['channel']['name']
-
-            if 'author' in data['meta']:
-                meta['author'] = meta['channel'].guild.get_member(data['meta']['author']['id'])
-
+            meta = cls._get_meta(data, playlist)
             entry = cls(playlist, url, title, destination=destination, **meta)
             if not destination and filename:
                 entry.filename = destination
 
             return entry
         except Exception as e:
-            log.error("Could not load {}".format(cls.__name__), exc_info=e)
+            log.error("Could not load %s", cls.__name__, exc_info=e)
 
     # noinspection PyMethodOverriding
     async def _download(self, *, fallback=False):

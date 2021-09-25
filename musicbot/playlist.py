@@ -1,29 +1,27 @@
-import os.path
-import logging
-import datetime
-
-from random import shuffle
-from itertools import islice
+from __future__ import annotations
 from collections import deque
+from itertools import islice
+from random import shuffle
+import datetime
+import logging
+import os.path
 
 from urllib.error import URLError
 from youtube_dl.utils import DownloadError, UnsupportedError
 
-from .utils import get_header
+from .bot import MusicBot
 from .constructs import Serializable
-from .lib.event_emitter import EventEmitter
 from .entry import URLPlaylistEntry, StreamPlaylistEntry
 from .exceptions import ExtractionError, WrongEntryTypeError
+from .lib.event_emitter import EventEmitter
+from .utils import get_header
 
 log = logging.getLogger(__name__)
 
-
 class Playlist(EventEmitter, Serializable):
-    """
-        A playlist is manages the list of songs that will be played.
-    """
+    """A playlist is manages the list of songs that will be played."""
 
-    def __init__(self, bot):
+    def __init__(self, bot: MusicBot):
         super().__init__()
         self.bot = bot
         self.loop = bot.loop
