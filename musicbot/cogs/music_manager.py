@@ -174,10 +174,11 @@ class MusicManagerCog(Cog):
         unlisted = 0
         and_more_text = '* ... and %s more*' % ('x' * len(player.playlist.entries))
 
-        if player.is_playing and player.progress:
+        is_currently_playing = player.is_playing and player.progress
+        if is_currently_playing:
             lines.append(self._is_playing_line(player))
 
-        current_line_sum = len(lines[0]) + 1 if player.is_playing else 0
+        current_line_sum = len(lines[0]) + 1 if is_currently_playing else 0
         for i, item in enumerate(player.playlist, 1):
             next_line = self._get_next_line(i, item)
             potential_len = current_line_sum + len(next_line) + len(and_more_text)
