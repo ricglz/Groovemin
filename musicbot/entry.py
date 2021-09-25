@@ -1,4 +1,6 @@
 '''Main module for managing entries'''
+from __future__ import annotations
+from typing import List, Optional, TYPE_CHECKING
 import asyncio
 import logging
 import os
@@ -10,14 +12,23 @@ from .constructs import Serializable
 from .exceptions import ExtractionError
 from .utils import get_header, md5sum
 
+if TYPE_CHECKING:
+    from .playlist import Playlist
+
 log = logging.getLogger(__name__)
 
 class BasePlaylistEntry(Serializable):
     '''Abstract class to specify properties of an entry'''
-    def __init__(self):
-        self.filename = None
-        self._is_downloading = False
-        self._waiting_futures = []
+    filename: Optional[str] = None
+    _is_downloading = False
+    _waiting_futures: List[asyncio.Future] = []
+
+    def __init__(self, playlist: Playlist, url: str, title: str, duration: float, **meta):
+        self.playlist = playlist
+        self.url = url
+        self.title = title
+        self.duration = duration
+        self.meta = meta
 
     @property
     def is_downloaded(self):
@@ -70,17 +81,12 @@ class BasePlaylistEntry(Serializable):
 
 
 class URLPlaylistEntry(BasePlaylistEntry):
+    aoptions = '-vn'
+
     def __init__(self, playlist, url, title, duration=0, expected_filename=None, **meta):
-        super().__init__()
+        super().__init__(playlist, url, title, duration, **meta)
 
-        self.playlist = playlist
-        self.url = url
-        self.title = title
-        self.duration = duration
         self.expected_filename = expected_filename
-        self.meta = meta
-        self.aoptions = '-vn'
-
         self.download_folder = self.playlist.downloader.download_folder
 
     def __json__(self):
@@ -311,15 +317,8 @@ class URLPlaylistEntry(BasePlaylistEntry):
 
 class StreamPlaylistEntry(BasePlaylistEntry):
     def __init__(self, playlist, url, title, *, destination=None, **meta):
-        super().__init__()
-
-        self.playlist = playlist
-        self.url = url
-        self.title = title
+        super().__init__(playlist, url, title, 0, **meta)
         self.destination = destination
-        self.duration = 0
-        self.meta = meta
-
         if self.destination:
             self.filename = self.destination
 
