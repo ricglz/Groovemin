@@ -1,28 +1,19 @@
-import os
+'''Main module for managing entries'''
 import asyncio
 import logging
-import traceback
+import os
 import re
 import sys
+import traceback
 
-from enum import Enum
 from .constructs import Serializable
 from .exceptions import ExtractionError
 from .utils import get_header, md5sum
 
 log = logging.getLogger(__name__)
 
-
-class EntryTypes(Enum):
-    URL = 1
-    STEAM = 2
-    FILE = 3
-
-    def __str__(self):
-        return self.name
-
-
 class BasePlaylistEntry(Serializable):
+    '''Abstract class to specify properties of an entry'''
     def __init__(self):
         self.filename = None
         self._is_downloading = False
@@ -30,18 +21,17 @@ class BasePlaylistEntry(Serializable):
 
     @property
     def is_downloaded(self):
-        if self._is_downloading:
-            return False
-
-        return bool(self.filename)
+        '''Property to now if the entry has already been downloaded'''
+        return not (self._is_downloading or self.filename is None)
 
     async def _download(self):
         raise NotImplementedError
 
     def get_ready_future(self):
         """
-        Returns a future that will fire when the song is ready to be played. The future will either fire with the result (being the entry) or an exception
-        as to why the song download failed.
+        Returns a future that will fire when the song is ready to be played.
+        The future will either fire with the result (being the entry) or an
+        exception as to why the song download failed.
         """
         future = asyncio.Future()
         if self.is_downloaded:
@@ -53,12 +43,13 @@ class BasePlaylistEntry(Serializable):
             self._waiting_futures.append(future)
             asyncio.ensure_future(self._download())
 
-        log.debug('Created future for {0}'.format(self.filename))
+        log.debug('Created future for %s', self.filename)
         return future
 
-    def _for_each_future(self, cb):
+    def _for_each_future(self, callback):
         """
-            Calls `cb` for each future that is not cancelled. Absorbs and logs any errors that may have occurred.
+        Calls `callback` for each future that is not cancelled. Absorbs and
+        logs any errors that may have occurred.
         """
         futures = self._waiting_futures
         self._waiting_futures = []
@@ -66,10 +57,8 @@ class BasePlaylistEntry(Serializable):
         for future in futures:
             if future.cancelled():
                 continue
-
             try:
-                cb(future)
-
+                callback(future)
             except:
                 traceback.print_exc()
 
