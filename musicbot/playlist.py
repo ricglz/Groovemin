@@ -333,9 +333,7 @@ class Playlist(EventEmitter, Serializable):
         return self.entries[0] if self.entries else None
 
     async def estimate_time_until(self, position, player):
-        """
-        (very) Roughly estimates the time till the queue will 'position'
-        """
+        """(very) Roughly estimates the time till the queue will 'position'."""
         estimated_time = sum(e.duration for e in islice(self.entries, position - 1))
 
         # When the player plays a song, it eats the first playlist item, so we
@@ -346,22 +344,17 @@ class Playlist(EventEmitter, Serializable):
         return datetime.timedelta(seconds=estimated_time)
 
     def count_for_user(self, user):
+        '''Count how many entries the given user has added.'''
         return sum(1 for e in self.entries if e.meta.get('author', None) == user)
 
-
     def __json__(self):
-        return self._enclose_json({
-            'entries': list(self.entries)
-        })
+        return self._enclose_json({'entries': list(self.entries)})
 
     @classmethod
     def _deserialize(cls, raw_json, bot=None):
         assert bot is not None, cls._bad('bot')
-        # log.debug("Deserializing playlist")
-        pl = cls(bot)
-
+        playlist = cls(bot)
         for entry in raw_json['entries']:
-            pl.entries.append(entry)
-
+            playlist.entries.append(entry)
         # TODO: create a function to init downloading (since we don't do it here)?
-        return pl
+        return playlist
