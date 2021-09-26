@@ -56,6 +56,7 @@ class Downloader:
 
     @property
     def ytdl(self):
+        '''The safe youtube_dl instance'''
         return self.safe_ytdl
 
     async def extract_info(self, loop, *args, on_error=None, retry_on_error=False, **kwargs):
