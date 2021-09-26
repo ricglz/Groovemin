@@ -44,6 +44,7 @@ class SourcePlaybackCounter(AudioSource):
         return res
 
     def get_progress(self):
+        '''Gets the current progress of the audio'''
         return self.progress * 0.02
 
     def cleanup(self):
@@ -305,7 +306,8 @@ class MusicPlayer(EventEmitter, Serializable):
         return player
 
     @classmethod
-    def from_json(cls, raw_json, bot, voice_client, playlist):
+    def from_json(cls, raw_json, _bot, _voice_client, _playlist):
+        '''Creates a MusicPlayer instance from raw_json.'''
         try:
             return json.loads(raw_json, object_hook=Serializer.deserialize)
         except Exception as e:
@@ -313,35 +315,40 @@ class MusicPlayer(EventEmitter, Serializable):
 
     @property
     def current_entry(self):
+        '''Entry that is currently playing'''
         return self._current_entry
 
     @property
     def is_playing(self):
+        '''Boolean property that asses the MusicPlayer is playing.'''
         return self.state == MusicPlayerState.PLAYING
 
     @property
     def is_paused(self):
+        '''Boolean property that asses the MusicPlayer is paused.'''
         return self.state == MusicPlayerState.PAUSED
 
     @property
     def is_stopped(self):
+        '''Boolean property that asses the MusicPlayer is stopped.'''
         return self.state == MusicPlayerState.STOPPED
 
     @property
     def is_dead(self):
+        '''Boolean property that asses the MusicPlayer is dead.'''
         return self.state == MusicPlayerState.DEAD
 
     @property
     def progress(self):
-        if self._source:
-            return self._source.get_progress()
-            # TODO: Properly implement this Correct calculation should be
-            # bytes_read/192k 192k AKA sampleRate * (bitDepth / 8)
-            # * channelCount
+        '''Gets the progress of the current entry'''
+        # TODO: Properly implement this Correct calculation should be
+        # bytes_read/192k 192k AKA sampleRate * (bitDepth / 8) * channelCount
+        return self._source.get_progress() if self._source else 0
 
 # TODO: I need to add a check for if the eventloop is closed
 
 def filter_stderr(popen:subprocess.Popen, future:asyncio.Future):
+    '''Filters the output to stderr'''
     last_ex = None
 
     while True:
@@ -352,13 +359,11 @@ def filter_stderr(popen:subprocess.Popen, future:asyncio.Future):
                 if check_stderr(data):
                     sys.stderr.buffer.write(data)
                     sys.stderr.buffer.flush()
-
-            except FFmpegError as e:
-                log.ffmpeg("Error from ffmpeg: %s", str(e).strip())
-                last_ex = e
-
+            except FFmpegError as err:
+                log.ffmpeg("Error from ffmpeg: %s", str(err).strip())
+                last_ex = err
             except FFmpegWarning:
-                pass # useless message
+                pass
         else:
             break
 
@@ -368,26 +373,27 @@ def filter_stderr(popen:subprocess.Popen, future:asyncio.Future):
         future.set_result(True)
 
 def check_stderr(data:bytes):
+    '''Checks stderr with the given data'''
     try:
         data = data.decode('utf8')
     except:
         log.ffmpeg("Unknown error decoding message from ffmpeg", exc_info=True)
-        return True # fuck it
-
-    # log.ffmpeg("Decoded data from ffmpeg: {}".format(data))
+        return True
 
     # TODO: Regex
     warnings = [
         "Header missing",
         "Estimating duration from birate, this may be inaccurate",
-        "Using AVStream.codec to pass codec parameters to muxers is deprecated, use AVStream.codecpar instead.",
+        "Using AVStream.codec to pass codec parameters to muxers is deprecated, use "
+        "AVStream.codecpar instead.",
         "Application provided invalid, non monotonically increasing dts to muxer in stream",
         "Last message repeated",
         "Failed to send close message",
         "decode_band_types: Input buffer exhausted before END element found"
     ]
     errors = [
-        "Invalid data found when processing input", # need to regex this properly, its both a warning and an error
+        # need to regex this properly, its both a warning and an error
+        "Invalid data found when processing input",
     ]
 
     if any(msg in data for msg in warnings):
