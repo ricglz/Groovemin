@@ -35,7 +35,7 @@ class BasePlaylistEntry(Serializable):
         '''Property to now if the entry has already been downloaded'''
         return not (self._is_downloading or self.filename is None)
 
-    async def _download(self):
+    async def _download(self, fallback=None):
         raise NotImplementedError
 
     def get_ready_future(self):
@@ -141,11 +141,13 @@ class URLPlaylistEntry(BasePlaylistEntry):
 
     async def _download_generic_extractor(self):
         flistdir = [f.rsplit('-', 1)[0] for f in os.listdir(self.download_folder)]
-        expected_fname_noex, fname_ex = os.path.basename(self.expected_filename).rsplit('.', 1)
+        expected_fname_noex, _ = os.path.basename(self.expected_filename).rsplit('.', 1)
 
         if expected_fname_noex in flistdir:
             try:
-                rsize = int(await get_header(self.playlist.bot.aiosession, self.url, 'CONTENT-LENGTH'))
+                rsize = int(
+                    await get_header(self.playlist.bot.aiosession, self.url, 'CONTENT-LENGTH')
+                )
             except:
                 rsize = 0
 
@@ -193,7 +195,7 @@ class URLPlaylistEntry(BasePlaylistEntry):
             await self._really_download()
 
     # noinspection PyTypeChecker
-    async def _download(self):
+    async def _download(self, fallback=None):
         if self._is_downloading:
             return
 
@@ -241,7 +243,8 @@ class URLPlaylistEntry(BasePlaylistEntry):
         stdout, stderr = await process.communicate()
         return stdout + stderr
 
-    def get(self, program):
+    @staticmethod
+    def get(program):
         '''Gets program binary filepath'''
         def is_exe(fpath):
             found = os.path.isfile(fpath) and os.access(fpath, os.X_OK)
@@ -354,7 +357,7 @@ class StreamPlaylistEntry(BasePlaylistEntry):
             log.error("Could not load %s", cls.__name__, exc_info=e)
 
     # noinspection PyMethodOverriding
-    async def _download(self, *, fallback=False):
+    async def _download(self, fallback=False):
         self._is_downloading = True
 
         url = self.destination if fallback else self.url
