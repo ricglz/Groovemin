@@ -14,24 +14,26 @@ _CONFPREFACE = "An error has occurred reading the config:\n"
 _CONFPREFACE2 = "An error has occurred validating the config:\n"
 
 class ConfigParser(BaseConfigParser):
+    '''Improved version of BaseConfigParser that can parse sets.'''
     @staticmethod
     def str_to_list(string_value):
+        '''Parses a string of elements into a list.'''
         return string_value.replace(',', ' ').split()
 
     def get_set(self, section: str, option: str, *, raw=False, vars=None, fallback=None):
-        '''Gets a set for the given section and value'''
+        '''Gets a set for the given section and option.'''
         option_value = self.get(section, option, raw=raw, vars=vars, fallback=fallback)
-        try:
-            return set(self.str_to_list(option_value))
-        except ValueError:
-            log.warning('%s data is invalid, will ignore.', option)
+        if option_value is None:
             return set()
+        return set(self.str_to_list(option_value))
 
     def get_int_set(self, section: str, option: str, *, raw=False, vars=None, fallback=None):
-        '''Gets a set for the given section and value'''
-        option_value = self.get(section, option, raw=raw, vars=vars, fallback=fallback)
+        '''
+        Gets a set for the given section and option, the values of the set will be cast to int.
+        '''
+        option_set = self.get_set(section, option, raw=raw, vars=vars, fallback=fallback)
         try:
-            return set(int(value) for value in self.str_to_list(option_value))
+            return set(int(value) for value in option_set)
         except ValueError:
             log.warning('%s data is invalid, will ignore.', option)
             return set()
@@ -49,7 +51,16 @@ def check_confsections(config: ConfigParser):
             preface="An error has occurred parsing the config:\n"
         )
 
-class CredentialsConfig:
+class SectionConfig:
+    '''Abstract class for classes containing the values of specific sections.'''
+    def run_checks(self):
+        '''Checks that the values are valid.'''
+
+    def async_validate(self, bot):
+        '''Permons an async validation of the values.'''
+
+class CredentialsConfig(SectionConfig):
+    '''Class containing config data of the `Credentials` section'''
     auth = ()
 
     def __init__(self, config: ConfigParser):
@@ -63,6 +74,7 @@ class CredentialsConfig:
         self._spotify = self.spotify_clientid and self.spotify_clientsecret
 
     def run_checks(self):
+        '''Checks that the values are valid.'''
         if not self._login_token:
             raise HelpfulError(
                 "No bot token was specified in the config.",
@@ -72,8 +84,8 @@ class CredentialsConfig:
             )
         self.auth = (self._login_token,)
 
-
-class PlaylistsConfig:
+class PlaylistsConfig(SectionConfig):
+    '''Class containing config data of the `Playlists` section'''
     def __init__(self, config: ConfigParser):
         self.normie_playlist = config.get(
             'Playlists', 'NormiePlaylist', fallback=ConfigDefaults.normie_playlist
@@ -82,7 +94,8 @@ class PlaylistsConfig:
             'Playlists', 'WeebPlaylist', fallback=ConfigDefaults.weeb_playlist
         )
 
-class PermissionsConfig:
+class PermissionsConfig(SectionConfig):
+    '''Class containing config data of the `Permissions` section'''
     def __init__(self, config: ConfigParser):
         self.owner_id = config.get('Permissions', 'OwnerID', fallback=ConfigDefaults.owner_id)
         self.dev_ids = config.get('Permissions', 'DevIDs', fallback=ConfigDefaults.dev_ids)
@@ -91,6 +104,7 @@ class PermissionsConfig:
         )
 
     def run_checks(self):
+        '''Checks that the values are valid.'''
         if self.owner_id:
             self.owner_id = self.owner_id.lower()
             if self.owner_id.isdigit():
@@ -115,6 +129,7 @@ class PermissionsConfig:
             )
 
     def async_validate(self, bot):
+        '''Permons an async validation of the values.'''
         if self.owner_id == 'auto':
             if not bot.user.bot:
                 raise HelpfulError(
@@ -142,7 +157,8 @@ class PermissionsConfig:
                 preface=_CONFPREFACE2
             )
 
-class ChatConfig:
+class ChatConfig(SectionConfig):
+    '''Class containing config data of the `Chat` section'''
     def __init__(self, config: ConfigParser):
         self.command_prefix = config.get(
             'Chat', 'CommandPrefix', fallback=ConfigDefaults.command_prefix
@@ -172,7 +188,10 @@ class ChatConfig:
             'Chat', 'DeleteNowPlaying', fallback=ConfigDefaults.delete_nowplaying
         )
 
-class MusicBotConfig:
+class MusicBotConfig(SectionConfig):
+    '''Class containing config data of the `MusicBot` section'''
+    debug_mode = False
+
     def __init__(self, config: ConfigParser):
         self.default_volume = config.getfloat(
             'MusicBot', 'DefaultVolume', fallback=ConfigDefaults.default_volume
@@ -247,18 +266,25 @@ class MusicBotConfig:
         self.debug_level_str = self.debug_level
 
     def run_checks(self):
+        '''Checks that the values are valid.'''
         self.delete_invoking = self.delete_invoking and self.delete_messages
 
         if hasattr(logging, self.debug_level.upper()):
             self.debug_level = getattr(logging, self.debug_level.upper())
         else:
-            log.warning("Invalid DebugLevel option \"{}\" given, falling back to INFO".format(self.debug_level_str))
+            log.warning(
+                'Invalid DebugLevel option "%s" given, falling back to INFO',
+                self.debug_level_str
+            )
             self.debug_level = logging.INFO
             self.debug_level_str = 'INFO'
 
         self.debug_mode = self.debug_level <= logging.DEBUG
 
-class FilesConfig:
+class FilesConfig(SectionConfig):
+    '''Class containing config data of the `Files` section'''
+    auto_playlist_removed_file = None
+
     def __init__(self, config: ConfigParser):
         self.blacklist_file = config.get(
             'Files', 'BlacklistFile', fallback=ConfigDefaults.blacklist_file
@@ -269,8 +295,11 @@ class FilesConfig:
         self.i18n_file = config.get('Files', 'i18nFile', fallback=ConfigDefaults.i18n_file)
 
     def run_checks(self):
+        '''Checks that the values are valid.'''
         if self.i18n_file != ConfigDefaults.i18n_file and not os.path.isfile(self.i18n_file):
-            log.warning('i18n file does not exist. Trying to fallback to {0}.'.format(ConfigDefaults.i18n_file))
+            log.warning(
+                'i18n file does not exist. Trying to fallback to %s.', ConfigDefaults.i18n_file
+            )
             self.i18n_file = ConfigDefaults.i18n_file
         if not os.path.isfile(self.i18n_file):
             raise HelpfulError(
@@ -287,9 +316,7 @@ class FilesConfig:
 
 class Config:
     '''Main file for managing the configuration of the bot'''
-    auto_playlist_removed_file = None
     missing_keys = set()
-    _spotify = False
 
     def __init__(self, config_file):
         self.config_file = config_file
@@ -338,12 +365,13 @@ class Config:
     def run_checks(self):
         '''Validation logic for bot settings.'''
         for config_class in self.configs:
-            if hasattr(config_class, 'run_checks'):
-                config_class.run_checks()
-        self.create_empty_file_ifnoexist('config/blacklist.txt')
-        self.create_empty_file_ifnoexist('config/whitelist.txt')
+            config_class.run_checks()
+        self.create_empty_file_if_no_exist('config/blacklist.txt')
+        self.create_empty_file_if_no_exist('config/whitelist.txt')
 
-    def create_empty_file_ifnoexist(self, path):
+    @staticmethod
+    def create_empty_file_if_no_exist(path):
+        '''Creates an empty file in the case that it does not exist'''
         if not os.path.isfile(path):
             open(path, 'a', encoding='utf-8').close()
             log.warning('Creating %s', path)
@@ -352,12 +380,13 @@ class Config:
     #       Maybe add warnings about fields missing from the config file
 
     async def async_validate(self, bot):
+        '''Permons an async validation of the values.'''
         log.debug("Validating options...")
         for config_class in self.configs:
-            if hasattr(config_class, 'async_validate'):
-                config_class.async_validate(bot)
+            config_class.async_validate(bot)
 
     def find_config(self):
+        '''Finds the config file'''
         config = ConfigParser(interpolation=None)
 
         if not os.path.isfile(self.config_file):
@@ -383,12 +412,12 @@ class Config:
                 )
 
         if not config.read(self.config_file, encoding='utf-8'):
-            c = ConfigParser()
+            config = ConfigParser()
             try:
                 # load the config again and check to see if the user edited that one
-                c.read(self.config_file, encoding='utf-8')
+                config.read(self.config_file, encoding='utf-8')
 
-                if not int(c.get('Permissions', 'OwnerID', fallback=0)): # jake pls no flame
+                if not int(config.get('Permissions', 'OwnerID', fallback=0)): # jake pls no flame
                     print(flush=True)
                     log.critical("Please configure config/options.ini and re-run the bot.")
                     sys.exit(1)
@@ -397,17 +426,17 @@ class Config:
             except ValueError as err:
                 raise HelpfulError(
                     'Invalid value "{}" for OwnerID, config cannot be loaded. '.format(
-                        c.get('Permissions', 'OwnerID', fallback=None)
+                        config.get('Permissions', 'OwnerID', fallback=None)
                     ),
                     "The OwnerID option requires a user ID or 'auto'."
                 ) from err
 
-            except Exception as e:
+            except Exception as err:
                 print(flush=True)
                 log.critical(
                     "Unable to copy config/example_options.ini to %s",
                     self.config_file,
-                    exc_info=e
+                    exc_info=err
                 )
                 sys.exit(2)
 
@@ -417,6 +446,7 @@ class Config:
         return config
 
     def find_autoplaylist(self):
+        '''Finds auto_playlist file'''
         if not os.path.exists(self.auto_playlist_file):
             if os.path.exists('config/_autoplaylist.txt'):
                 shutil.copy('config/_autoplaylist.txt', self.auto_playlist_file)
@@ -424,11 +454,8 @@ class Config:
             else:
                 log.warning("No autoplaylist file found.")
 
-    def write_default_config(self, location):
-        pass
-
-
 class ConfigDefaults:
+    '''Class containing the default values of the bot configuration'''
     owner_id = None
 
     token = None
@@ -481,14 +508,12 @@ class ConfigDefaults:
     auto_playlist_file = 'config/autoplaylist.txt'  # this will change when I add playlists
     i18n_file = 'config/i18n/en.json'
 
-setattr(ConfigDefaults, codecs.decode(b'ZW1haWw=', '\x62\x61\x73\x65\x36\x34').decode('ascii'), None)
-setattr(ConfigDefaults, codecs.decode(b'cGFzc3dvcmQ=', '\x62\x61\x73\x65\x36\x34').decode('ascii'), None)
-setattr(ConfigDefaults, codecs.decode(b'dG9rZW4=', '\x62\x61\x73\x65\x36\x34').decode('ascii'), None)
-
-# These two are going to be wrappers for the id lists, with add/remove/load/save functions
-# and id/object conversion so types aren't an issue
-class Blacklist:
-    pass
-
-class Whitelist:
-    pass
+setattr(
+    ConfigDefaults, codecs.decode(b'ZW1haWw=', '\x62\x61\x73\x65\x36\x34').decode('ascii'), None
+)
+setattr(
+    ConfigDefaults, codecs.decode(b'cGFzc3dvcmQ=', '\x62\x61\x73\x65\x36\x34').decode('ascii'), None
+)
+setattr(
+    ConfigDefaults, codecs.decode(b'dG9rZW4=', '\x62\x61\x73\x65\x36\x34').decode('ascii'), None
+)
