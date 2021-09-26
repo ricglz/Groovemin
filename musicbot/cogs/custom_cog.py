@@ -89,3 +89,11 @@ class CustomCog(Cog):
 
     async def _get_player(self, channel) -> MusicPlayer:
         return await self._get_player_cog().get_player(channel)
+
+    async def _get_song_info(self, player: MusicPlayer, song_url: str):
+        return await self.downloader.extract_info(
+            player.playlist.loop,
+            song_url,
+            download=False,
+            process=False
+        )

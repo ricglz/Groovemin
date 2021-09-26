@@ -89,13 +89,7 @@ class PlayCog(CustomCog):
         '''Try to determine entry type, if _type is playlist then there should be entries'''
         while True:
             try:
-                info = await self.downloader.extract_info(
-                    player.playlist.loop,
-                    song_url,
-                    download=False,
-                    process=False
-                )
-
+                info = await self._get_song_info(player, song_url)
                 # If there is an exception arise when processing we go on and
                 # let extract_info down the line report it because info might
                 # be a playlist and thing that's broke it might be individual
@@ -135,12 +129,7 @@ class PlayCog(CustomCog):
                 if 'unknown url type' in str(e):
                     # It's probably not actually an extractor
                     song_url = song_url.replace(':', '')
-                    info = await self.downloader.extract_info(
-                        player.playlist.loop,
-                        song_url,
-                        download=False,
-                        process=False
-                    )
+                    info = await self._get_song_info(player, song_url)
                 else:
                     raise CommandError(e, expire_in=30) from e
 

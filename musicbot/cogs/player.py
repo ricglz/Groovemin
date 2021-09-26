@@ -343,12 +343,7 @@ class PlayerCog(Cog):
             info = {}
 
             try:
-                info = await self.downloader.extract_info(
-                    player.playlist.loop,
-                    song_url,
-                    download=False,
-                    process=False
-                )
+                info = await self._get_song_info(player, song_url)
             except DownloadError as err:
                 if 'YouTube said:' in err.args[0]:
                     # url is bork, remove from list and put in removed list
