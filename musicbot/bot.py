@@ -136,6 +136,8 @@ class MusicBot(Bot):
             raise ValueError('MessengerCog is missing')
         if isinstance(exception, CommandInvokeError):
             exception = exception.original
+        if isinstance(exception, TerminateSignal):
+            quit()
         expire_in = None
         if isinstance(exception, (MusicbotException)):
             expire_in = exception.expire_in
