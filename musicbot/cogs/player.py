@@ -194,9 +194,9 @@ class PlayerCog(Cog):
         author_perms = self.permissions.for_user(author)
 
         if author not in player.voice_client.channel.members and author_perms.skip_when_absent:
+            player.skip()
             return 'Skipping next song in `%s`: `%s` added by `%s` as queuer not in voice' % (
                 player.voice_client.channel.name, entry.title, entry.meta['author'].name)
-            player.skip()
         if self.config.now_playing_mentions:
             return '%s - your song `%s` is now playing in `%s`!' % (
                 entry.meta['author'].mention, entry.title, player.voice_client.channel.name)

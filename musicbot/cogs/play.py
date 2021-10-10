@@ -125,13 +125,13 @@ class PlayCog(CustomCog):
                 log.debug('Using "%s" instead', use_url)
                 song_url = use_url
 
-            except Exception as e:
-                if 'unknown url type' in str(e):
+            except Exception as err:
+                if 'unknown url type' in str(err):
                     # It's probably not actually an extractor
                     song_url = song_url.replace(':', '')
                     info = await self._get_song_info(player, song_url)
                 else:
-                    raise CommandError(e, expire_in=30) from e
+                    raise CommandError(err, expire_in=30) from err
 
         return info, song_url
 
@@ -176,8 +176,8 @@ class PlayCog(CustomCog):
             song_url,
             download=False,
             process=True,
-            on_error=lambda e: asyncio.ensure_future(
-                self.safe_send_message(channel, "```\n%s\n```" % e, expire_in=120),
+            on_error=lambda err: asyncio.ensure_future(
+                self.safe_send_message(channel, "```\n%s\n```" % err, expire_in=120),
                 loop=self.bot.loop
             ),
             retry_on_error=True
@@ -215,6 +215,21 @@ class PlayCog(CustomCog):
         ).format(num_songs, eta_msg)
         return await self.safe_send_message(channel, safe_msg)
 
+    async def _filter_based_on_max_length(self, entry_list: list, permissions, player):
+        drop_count = 0
+        entry_list_copy = entry_list.copy()
+        for entry in entry_list_copy:
+            # Im pretty sure there's no situation where this would ever
+            # break. Unless the first entry starts being played, which
+            # would make this a race condition
+            if entry.duration > permissions.max_song_length:
+                player.playlist.entries.remove(entry)
+                entry_list.remove(entry)
+                drop_count += 1
+        if drop_count:
+            log.info("Dropped %s songs", drop_count)
+        return entry_list, drop_count
+
     async def _handle_entries(self, play_req: PlayRequirements, info):
         author = play_req.author
         channel = play_req.channel
@@ -235,12 +250,12 @@ class PlayCog(CustomCog):
                 )
             except CommandError:
                 raise
-            except Exception as e:
+            except Exception as err:
                 log.error("Error queuing playlist", exc_info=True)
                 error_msg = self.str.get(
                     'cmd-play-playlist-error', 'Error queuing playlist:\n`{0}`'
-                ).format(e)
-                raise CommandError(error_msg, expire_in=30) from e
+                ).format(err)
+                raise CommandError(error_msg, expire_in=30) from err
 
         t0 = time.time()
 
@@ -273,19 +288,11 @@ class PlayCog(CustomCog):
         tnow = time.time()
         ttime = tnow - t0
         listlen = len(entry_list)
-        drop_count = 0
 
         if permissions.max_song_length:
-            for e in entry_list.copy():
-                # Im pretty sure there's no situation where this would ever
-                # break Unless the first entry starts being played, which would
-                # make this a race condition
-                if e.duration > permissions.max_song_length:
-                    player.playlist.entries.remove(e)
-                    entry_list.remove(e)
-                    drop_count += 1
-            if drop_count:
-                log.info("Dropped %s songs", drop_count)
+            entry_list, drop_count = self._filter_based_on_max_length(
+                entry_list, permissions, player
+            )
 
         log.info("Processed {} songs in {} seconds at {:.2f}s/song, {:+.2g}/song from expected ({}s)".format(
             listlen,
@@ -326,8 +333,8 @@ class PlayCog(CustomCog):
                     download=False,
                     process=False
                 )
-            except Exception as e:
-                raise CommandError(e, expire_in=30) from e
+            except Exception as err:
+                raise CommandError(err, expire_in=30) from err
 
         if permissions.max_song_length and info.get('duration', 0) > permissions.max_song_length:
             error_msg = self.str.get(
@@ -598,21 +605,12 @@ class PlayCog(CustomCog):
 
 
         songs_processed = len(entries_added)
-        drop_count = 0
         skipped = False
 
         if permissions.max_song_length:
-            for e in entries_added.copy():
-                if e.duration > permissions.max_song_length:
-                    try:
-                        player.playlist.entries.remove(e)
-                        entries_added.remove(e)
-                        drop_count += 1
-                    except:
-                        pass
-
-            if drop_count:
-                log.debug('Dropped %s songs', drop_count)
+            entries_added = self._filter_based_on_max_length(
+                entries_added, permissions, player
+            )[0]
 
             if player.current_entry and player.current_entry.duration > permissions.max_song_length:
                 await self.safe_delete_message(self.server_specific_data[channel.guild]['last_np_msg'])
