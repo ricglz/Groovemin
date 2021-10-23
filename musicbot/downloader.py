@@ -1,100 +1,84 @@
 '''Module containing the main downloader class'''
-from concurrent.futures import ThreadPoolExecutor
 import asyncio
-import functools
 import logging
-import os
+
+from discord import FFmpegPCMAudio, PCMVolumeTransformer
 
 from youtube_dl import YoutubeDL
-import youtube_dl.utils as youtube_dl_utils
 
 log = logging.getLogger(__name__)
 
-ytdl_format_options = {
-    'format': 'bestaudio/best',
-    'outtmpl': '%(extractor)s-%(id)s-%(title)s.%(ext)s',
-    'restrictfilenames': True,
-    'noplaylist': True,
-    'nocheckcertificate': True,
-    'ignoreerrors': False,
-    'logtostderr': False,
+simulate = {
+    'default_search': 'auto',
+    'ignoreerrors': True,
     'quiet': True,
     'no_warnings': True,
-    'default_search': 'auto',
-    'source_address': '0.0.0.0',
-    'usenetrc': True
+    'simulate': True,  # do not keep the video files
+    'nooverwrites': True,
+    'keepvideo': False,
+    'noplaylist': True,
+    'skip_download': False,
+    # bind to ipv4 since ipv6 addresses cause issues sometimes
+    'source_address': '0.0.0.0'
 }
 
-# Fuck your useless bugreports message that gets two link embeds and confuses users
-youtube_dl_utils.bug_reports_message = lambda: ''
+ffmpeg_options = {'options': '-vn'}
 
-'''
-    Alright, here's the problem.  To catch youtube-dl errors for their useful
-    information, I have to catch the exceptions with `ignoreerrors` off.  To
-    not break when ytdl hits a dumb video (rental videos, etc), I have to have
-    `ignoreerrors` on.  I can change these whenever, but with async that's bad.
-    So I need multiple ytdl objects.
-'''
+class Downloader(PCMVolumeTransformer):
+    def __init__(self, source, *, data, volume=0.5):
+        super().__init__(source, volume)
+        self.data = data
+        self.title = data.get('title')
+        self.url = data.get('url')
+        self.thumbnail = data.get('thumbnail')
+        self.duration = data.get('duration')
+        self.views = data.get('view_count')
+        self.playlist = {}
 
-class Downloader:
-    '''Class in charge of downloading audio files using youtube_dl'''
-    def __init__(self, download_folder=None):
-        self.thread_pool = ThreadPoolExecutor(max_workers=2)
-        self.unsafe_ytdl = YoutubeDL(ytdl_format_options)
-        self.safe_ytdl = YoutubeDL(ytdl_format_options)
-        self.safe_ytdl.params['ignoreerrors'] = True
-        self.download_folder = download_folder
-
-        if download_folder:
-            otmpl = self.unsafe_ytdl.params['outtmpl']
-            self.unsafe_ytdl.params['outtmpl'] = os.path.join(download_folder, otmpl)
-            # print("setting template to " + os.path.join(download_folder, otmpl))
-
-            otmpl = self.safe_ytdl.params['outtmpl']
-            self.safe_ytdl.params['outtmpl'] = os.path.join(download_folder, otmpl)
-
-
-    @property
-    def ytdl(self):
-        '''The safe youtube_dl instance'''
-        return self.safe_ytdl
-
-    async def extract_info(self, loop, *args, on_error=None, retry_on_error=False, **kwargs):
-        """
-            Runs ytdl.extract_info within the threadpool. Returns a future that
-            will fire when it's done.  If `on_error` is passed and an exception
-            is raised, the exception will be caught and passed to on_error as
-            an argument.
-        """
-        if callable(on_error):
-            try:
-                return await loop.run_in_executor(
-                    self.thread_pool,
-                    functools.partial(self.unsafe_ytdl.extract_info, *args, **kwargs)
-                )
-
-            except (youtube_dl_utils.ExtractorError, youtube_dl_utils.DownloadError) as err:
-                # I hope I don't have to deal with ContentTooShortError's
-                if asyncio.iscoroutinefunction(on_error):
-                    asyncio.ensure_future(on_error(err), loop=loop)
-
-                elif asyncio.iscoroutine(on_error):
-                    asyncio.ensure_future(on_error, loop=loop)
-
-                else:
-                    loop.call_soon_threadsafe(on_error, err)
-
-                if retry_on_error:
-                    return await self.safe_extract_info(loop, *args, **kwargs)
-        else:
-            return await loop.run_in_executor(
-                self.thread_pool,
-                functools.partial(self.unsafe_ytdl.extract_info, *args, **kwargs)
-            )
-
-    async def safe_extract_info(self, loop, *args, **kwargs):
-        '''Safely extract info'''
+    @staticmethod
+    async def _get_data(
+        loop: asyncio.AbstractEventLoop,
+        yt_dl: YoutubeDL,
+        query: str,
+        download: bool
+    ):
         return await loop.run_in_executor(
-            self.thread_pool,
-            functools.partial(self.safe_ytdl.extract_info, *args, **kwargs)
+            None,
+            lambda: yt_dl.extract_info(query, download=download)
         )
+
+    @classmethod
+    async def video_url(cls, query: str, yt_dl: YoutubeDL, *, loop=None, stream: bool=False):
+        """Download the song file and data."""
+        loop = loop or asyncio.get_event_loop()
+        data = await cls._get_data(loop, yt_dl, query, not stream)
+        song_list = {'queue': []}
+        if 'entries' in data:
+            if len(data['entries']) > 1:
+                playlist_titles = [title['title'] for title in data['entries']]
+                song_list = {'queue': playlist_titles}
+                song_list['queue'].pop(0)
+
+            data = data['entries'][0]
+
+        filename = data['url'] if stream else yt_dl.prepare_filename(data)
+        return cls(FFmpegPCMAudio(filename, **ffmpeg_options), data=data), song_list
+
+    @classmethod
+    async def get_info(cls, query):
+        """
+        Get the info of the next song by not downloading the actual file but
+        just the data of song/query.
+        """
+        data = await cls._get_data(asyncio.get_event_loop(), YoutubeDL(simulate), query, False)
+        extra_data = {'queue': []}
+        if 'entries' in data:
+            if len(data['entries']) > 1:
+                playlist_titles = [title['title'] for title in data['entries']]
+                extra_data = {'title': data['title'], 'queue': playlist_titles}
+
+            title = data['entries'][0]['title']
+        else:
+            title = data
+
+        return title, extra_data

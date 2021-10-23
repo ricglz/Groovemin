@@ -13,32 +13,33 @@ from .custom_cog import CustomCog as Cog
 
 log = logging.getLogger(__name__)
 
+def get_prog_bar(player, streaming: bool):
+    '''Gets the progress related strings'''
+    song_progress = ftimedelta(timedelta(seconds=player.progress))
+    song_total = ftimedelta(timedelta(seconds=player.current_entry.duration))
+
+    prog_str = ('`[{progress}]`' if streaming else '`[{progress}/{total}]`').format(
+        progress=song_progress, total=song_total
+    )
+
+    # percentage shows how much of the current song has already been played
+    percentage = 0 if player.current_entry.duration == 0 \
+                 else player.progress / player.current_entry.duration
+
+    # create the actual bar
+    progress_bar_length = 30
+    prog_bar_str = ''
+    for i in range(progress_bar_length):
+        prog_bar_str += '□' if percentage < 1 / progress_bar_length * i else '■'
+
+    return prog_str, prog_bar_str
+
 class NowPlayingCog(Cog):
     '''Cog class in charge of the now_playing command'''
-    def get_prog_bar(self, player, streaming: bool):
-        '''Gets the progress related strings'''
-        # TODO: Fix timedelta garbage with util function
-        song_progress = ftimedelta(timedelta(seconds=player.progress))
-        song_total = ftimedelta(timedelta(seconds=player.current_entry.duration))
-
-        prog_str = ('`[{progress}]`' if streaming else '`[{progress}/{total}]`').format(
-            progress=song_progress, total=song_total
-        )
-
-        # percentage shows how much of the current song has already been played
-        percentage = 0 if player.current_entry.duration == 0 \
-                     else player.progress / player.current_entry.duration
-
-        # create the actual bar
-        progress_bar_length = 30
-        prog_bar_str = ''
-        for i in range(progress_bar_length):
-            prog_bar_str += '□' if percentage < 1 / progress_bar_length * i else '■'
-
-        return prog_str, prog_bar_str
 
     @command(
-        description='Sends message specifying which entry is currently playing and how long it will last'
+        description='Sends message specifying which entry is currently playing '
+                    'and how long it will last'
     )
     async def now_playing(self, context: Context):
         '''Sends message specifying which entry is currently playing and how long it will last'''
@@ -54,7 +55,7 @@ class NowPlayingCog(Cog):
         await self.check_last_msg(guild)
 
         streaming = isinstance(player.current_entry, StreamPlaylistEntry)
-        prog_str, prog_bar_str = self.get_prog_bar(player, streaming)
+        prog_str, prog_bar_str = get_prog_bar(player, streaming)
 
         action_text = self.str.get('cmd-np-action-streaming', 'Streaming') if streaming \
                       else self.str.get('cmd-np-action-playing', 'Playing')

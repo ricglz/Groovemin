@@ -1,5 +1,4 @@
 '''Module containing messenger cog'''
-import asyncio
 import logging
 from typing import Optional, Union
 
@@ -51,10 +50,6 @@ class MessengerCog(CustomCog):
                 log.noise("Got HTTPException trying to send message to %s: %s", dest, content)
 
         return msg
-
-    async def _wait_delete_msg(self, message, after):
-        await asyncio.sleep(after)
-        await self.safe_delete_message(message, quiet=True)
 
     async def safe_delete_message(self, message, *, quiet=False):
         '''Deletes a sent message'''

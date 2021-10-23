@@ -1,22 +1,13 @@
 '''Class containing logic for Player Class'''
+from dataclasses import dataclass
+from typing import List, Optional
 from enum import Enum
-from threading import Thread
-from typing import Optional
+
 import asyncio
-import json
 import logging
 import os
-import subprocess
-import sys
 
-from discord import AudioSource, FFmpegPCMAudio, PCMVolumeTransformer, VoiceChannel
-from discord.ext.commands import Bot
-
-from .playlist import Playlist
-from .lib.event_emitter import EventEmitter
-from .constructs import Serializable, Serializer
-from .exceptions import FFmpegError, FFmpegWarning
-from .entry import URLPlaylistEntry, StreamPlaylistEntry
+from discord import FFmpegPCMAudio, PCMVolumeTransformer
 
 log = logging.getLogger(__name__)
 
@@ -27,399 +18,120 @@ class MusicPlayerState(Enum):
     PAUSED = 2   # The player is paused on a song.
     WAITING = 3  # The player has finished its song but is still downloading the next one
     DEAD = 4     # The player has been killed.
+    RESET = 5    # The player is playing but will play the same song when finished
+    LOOP = 6     # The player is playing but will play the same song until go out of the loop
 
     def __str__(self):
         return self.name
 
-class SourcePlaybackCounter(AudioSource):
-    '''Class in charge of being the source of the audio in a voice channel.'''
-    def __init__(self, source: PCMVolumeTransformer, progress = 0):
-        self._source = source
-        self.progress = progress
+@dataclass
+class QueueElement:
+    '''Represents an element of the music player queue'''
+    title: str
+    author: object
 
-    def read(self):
-        res = self._source.read()
-        if res:
-            self.progress += 1
-        return res
-
-    def get_progress(self):
-        '''Gets the current progress of the audio'''
-        return self.progress * 0.02
-
-    def cleanup(self):
-        self._source.cleanup()
-
-class MusicPlayer(EventEmitter, Serializable):
+@dataclass
+class MusicPlayer:
     '''Class in charge of all the music management'''
-    _current_entry = None
-    _current_player = None
-    _source = None
-    _stderr_future: Optional[asyncio.Future] = None
-    autoplaylist: Optional[list] = None
-    karaoke_mode = False
-    skip_state = None
+    author: Optional[object] = None
+    current_title: Optional[str] = None
+    filename: Optional[str] = None
+    _queue: List[QueueElement] = []
+    state: MusicPlayerState = MusicPlayerState.STOPPED
+    volume: float = 0.5
 
-    def __init__(self, bot: Bot, voice_client: VoiceChannel, playlist: Playlist):
-        super().__init__()
-        self.bot = bot
-        self.loop = bot.loop
-        self.voice_client = voice_client
-        self.playlist = playlist
-        self.state = MusicPlayerState.STOPPED
-        self._volume = bot.config.default_volume
-        self._play_lock = asyncio.Lock()
-        self.playlist.on('entry-added', self.on_entry_added)
+    def _add_to_queue(self, title, msg):
+        self._queue.append(QueueElement(title, msg))
+
+    def _queue_playlist(self, data, msg):
+        """THIS FUNCTION IS FOR WHEN YOUTUBE LINK IS A PLAYLIST."""
+        for title in data['queue']:
+            self._queue.append(QueueElement(title, msg))
 
     @property
-    def volume(self):
-        '''Percentage of the maximum volume of the source being used'''
-        return self._volume
+    def has_queue(self):
+        return len(self._queue) > 0
 
-    @volume.setter
-    def volume(self, value):
-        self._volume = value
-        if self._source:
-            self._source._source.volume = value
+    async def queue(self, song_query, msg):
+        '''Appends to the queue the data created by the downloader'''
+        if data['queue']:
+            self._queue_playlist(data, msg)
+            return await msg.send(f"Added playlist {data['title']} to queue")
+        self._add_to_queue(title, msg)
+        return await msg.send(f"**{title} added to queue**".title())
 
-    def on_entry_added(self, playlist, entry):
-        '''Listener when a new entry is added'''
-        if self.is_stopped:
-            self.loop.call_later(2, self.play)
+    def _clear_data(self):
+        """Clear the local dict data"""
+        os.remove(self.filename)
 
-        self.emit('entry-added', player=self, playlist=playlist, entry=entry)
-
-    def skip(self):
-        '''Skips current entry'''
-        self._kill_current_player()
-
-    def stop(self):
-        '''Stops playing'''
-        self.state = MusicPlayerState.STOPPED
-        self._kill_current_player()
-
-        self.emit('stop', player=self)
-
-    def resume(self):
-        '''Resumes playing'''
-        if not self.is_paused:
-            raise ValueError('Cannot resume playback from state %s' % self.state)
-
-        self.state = MusicPlayerState.PLAYING
-        if self._current_player:
-            self._current_player.resume()
-            self.emit('resume', player=self, entry=self.current_entry)
-        else:
-            self._kill_current_player()
-
-    def pause(self):
-        '''Pauses current entry'''
-        if self.is_playing:
-            self.state = MusicPlayerState.PAUSED
-
-            if self._current_player:
-                self._current_player.pause()
-
-            self.emit('pause', player=self, entry=self.current_entry)
+    async def _voice_check(self, msg: object):
+        '''Bot leave voice channel if music not being played for longer than 2 minutes,'''
+        if msg.voice_client is None:
             return
+        await asyncio.sleep(120)
+        is_still = msg.voice_client.is_playing() is False and msg.voice_client.is_paused() is False
+        if is_still:
+            await msg.voice_client.disconnect()
 
-        if self.is_paused:
-            return
+    async def start_song(self, song_query, msg):
+        new_opts = ytdl_format_options.copy()
+        audio_name = await self.filename_generator()
 
-        raise ValueError('Cannot pause a MusicPlayer in state %s' % self.state)
+        self.player['audio_files'].append(audio_name)
+        new_opts['outtmpl'] = new_opts['outtmpl'].format(audio_name)
+        self.player[msg.guild.id]['name'] = audio_name
 
-    def kill(self):
-        '''Kills/Finishes the player'''
-        self.state = MusicPlayerState.DEAD
-        self.playlist.clear()
-        self._events.clear()
-        self._kill_current_player()
+        ytdl = youtube_dl.YoutubeDL(new_opts)
+        download1 = await Downloader.video_url(song, ytdl=ytdl, loop=self.bot.loop)
+        download = download1[0]
+        data = download1[1]
+        emb = discord.Embed(colour=self.random_color, title='Now Playing',
+                            description=download.title, url=download.url)
+        emb.set_thumbnail(url=download.thumbnail)
+        emb.set_footer(
+            text=f'Requested by {msg.author.display_name}', icon_url=msg.author.avatar_url)
+        loop = asyncio.get_event_loop()
 
-    def _playback_finished(self, _error):
-        entry = self._current_entry
+        if data['queue']:
+            await self.playlist(data, msg)
 
-        if self._current_player:
-            self._current_player.after = None
-            self._kill_current_player()
+        msgId = await msg.send(embed=emb)
+        self.player[msg.guild.id]['player'] = download
+        self.player[msg.guild.id]['author'] = msg
+        msg.voice_client.play(
+            download, after=lambda a: loop.create_task(self.done(msg, msgId.id)))
 
-        self._current_entry = None
-        self._source = None
+        # if str(msg.guild.id) in self.music: #NOTE adds user's default volume if in database
+        #     msg.voice_client.source.volume=self.music[str(msg.guild.id)]['vol']/100
+        msg.voice_client.source.volume = self.player[msg.guild.id]['volume']
+        return msg.voice_client
 
-        if self._stderr_future.done() and self._stderr_future.exception():
-            # I'm not sure that this would ever not be done if it gets to this point
-            # unless ffmpeg is doing something highly questionable
-            self.emit('error', player=self, entry=entry, ex=self._stderr_future.exception())
+    async def _done(self, msg: object, msg_id: Optional[int]=None):
+        '''Function to run once song completes.'''
+        if msg_id:
+            message = await msg.channel.fetch_message(msg_id)
+            await message.delete()
 
-        if not self.bot.config.save_videos and entry:
-            if not isinstance(entry, StreamPlaylistEntry):
-                if any(entry.filename == e.filename for e in self.playlist.entries):
-                    log.debug("Skipping deletion of \"%s\", found song in queue", entry.filename)
-                else:
-                    log.debug("Deleting file: %s", os.path.relpath(entry.filename))
-                    filename = entry.filename
-                    for _ in range(30):
-                        try:
-                            os.unlink(filename)
-                            log.debug('File deleted: %s', filename)
-                            break
-                        except PermissionError as err:
-                            if err.winerror == 32:  # File is in use
-                                log.error(
-                                    'Can\'t delete file, it is currently in use: %s', filename
-                                )
-                        except FileNotFoundError:
-                            log.debug(
-                                'Could not find delete %s as it was not found. Skipping.',
-                                filename,
-                                exc_info=True
-                            )
-                            break
-                        except Exception:
-                            log.error("Error trying to delete %s", filename, exc_info=True)
-                            break
-                    else:
-                        msg = "[Config:SaveVideos] Could not delete file {} giving up and moving on"
-                        print(msg.format(os.path.relpath(filename)))
-
-        self.emit('finished-playing', player=self, entry=entry)
-
-    def _kill_current_player(self):
-        if self._current_player is None:
-            return False
-
-        if self.voice_client.is_paused():
-            self.voice_client.resume()
-
-        try:
-            self.voice_client.stop()
-        except OSError:
-            pass
-        self._current_player = None
-        return True
-
-    def play(self, _continue=False):
-        '''Create look task for `_play` function'''
-        self.loop.create_task(self._play(_continue=_continue))
-
-    async def _play(self, _continue=False):
-        """
-        Plays the next entry from the playlist, or resumes playback of the current entry if paused.
-        """
-        if self.is_paused and self._current_player:
-            return self.resume()
-
-        if self.is_dead:
-            return
-
-        with await self._play_lock:
-            if not self.is_stopped and not _continue:
-                return
-            try:
-                entry = await self.playlist.get_next_entry()
-            except:
-                log.warning("Failed to get entry, retrying", exc_info=True)
-                self.loop.call_later(0.1, self.play)
-                return
-
-            # If nothing left to play, transition to the stopped state.
-            if not entry:
-                self.stop()
-                return
-
-            # In-case there was a player, kill it. RIP.
-            self._kill_current_player()
-
-            boptions = "-nostdin"
-            # aoptions = "-vn -b:a 192k"
-            if isinstance(entry, URLPlaylistEntry):
-                aoptions = entry.aoptions
-            else:
-                aoptions = "-vn"
-
-            log.ffmpeg(
-                "Creating player with options: {} {} {}".format(boptions, aoptions, entry.filename)
-            )
-
-            self._source = SourcePlaybackCounter(
-                PCMVolumeTransformer(
-                    FFmpegPCMAudio(
-                        entry.filename,
-                        before_options=boptions,
-                        options=aoptions,
-                        stderr=subprocess.PIPE
-                    ),
-                    self.volume
-                )
-            )
-            log.debug('Playing %s using %s', self._source, self.voice_client)
-            self.voice_client.play(self._source, after=self._playback_finished)
-
-            self._current_player = self.voice_client
-
-            # I need to add ytdl hooks
+        if self.state == MusicPlayerState.RESET:
             self.state = MusicPlayerState.PLAYING
-            self._current_entry = entry
+            return await self._loop_song(msg)
 
-            self._stderr_future = asyncio.Future()
+        if self.state == MusicPlayerState.LOOP:
+            return await self._loop_song(msg)
 
-            stderr_thread = Thread(
-                target=filter_stderr,
-                args=(self._source._source.original._process, self._stderr_future),
-                name="stderr reader"
-            )
+        await self._clear_data()
 
-            stderr_thread.start()
+        if self._queue:
+            next_element = self._queue.pop(0)
+            return await self._start_song(next_element.author, next_element.title)
+        await self._voice_check(msg)
 
-            self.emit('play', player=self, entry=entry)
-
-    def __json__(self):
-        progress_frames = self._current_player._player.loops if self.progress is not None else None
-        return self._enclose_json({
-            'current_entry': {
-                'entry': self.current_entry,
-                'progress': self.progress,
-                'progress_frames': progress_frames
-            },
-            'entries': self.playlist
-        })
-
-    @classmethod
-    def _deserialize(cls, data, bot=None, voice_client=None, playlist=None):
-        assert bot is not None, cls._bad('bot')
-        assert voice_client is not None, cls._bad('voice_client')
-        assert playlist is not None, cls._bad('playlist')
-
-        player = cls(bot, voice_client, playlist)
-
-        data_pl = data.get('entries')
-        if data_pl and data_pl.entries:
-            player.playlist.entries = data_pl.entries
-
-        current_entry_data = data['current_entry']
-        if current_entry_data['entry']:
-            player.playlist.entries.appendleft(current_entry_data['entry'])
-            # TODO: progress stuff how do I even do this this would have to be
-            # in the entry class right? some sort of progress indicator to
-            # skip ahead with ffmpeg (however that works, reading and ignoring
-            # frames?)
-
-        return player
-
-    @classmethod
-    def from_json(cls, raw_json, _bot, _voice_client, _playlist):
-        '''Creates a MusicPlayer instance from raw_json.'''
-        try:
-            return json.loads(raw_json, object_hook=Serializer.deserialize)
-        except Exception as e:
-            log.exception("Failed to deserialize player, %s", e)
-
-    @property
-    def current_entry(self):
-        '''Entry that is currently playing'''
-        return self._current_entry
-
-    @property
-    def is_playing(self):
-        '''Boolean property that asses the MusicPlayer is playing.'''
-        return self.state == MusicPlayerState.PLAYING
-
-    @property
-    def is_paused(self):
-        '''Boolean property that asses the MusicPlayer is paused.'''
-        return self.state == MusicPlayerState.PAUSED
-
-    @property
-    def is_stopped(self):
-        '''Boolean property that asses the MusicPlayer is stopped.'''
-        return self.state == MusicPlayerState.STOPPED
-
-    @property
-    def is_dead(self):
-        '''Boolean property that asses the MusicPlayer is dead.'''
-        return self.state == MusicPlayerState.DEAD
-
-    @property
-    def progress(self):
-        '''Gets the progress of the current entry'''
-        # TODO: Properly implement this Correct calculation should be
-        # bytes_read/192k 192k AKA sampleRate * (bitDepth / 8) * channelCount
-        return self._source.get_progress() if self._source else 0
-
-# TODO: I need to add a check for if the eventloop is closed
-
-def filter_stderr(popen:subprocess.Popen, future:asyncio.Future):
-    '''Filters the output to stderr'''
-    last_ex = None
-
-    while True:
-        data = popen.stderr.readline()
-        if data:
-            log.ffmpeg("Data from ffmpeg: {}".format(data))
-            try:
-                if check_stderr(data):
-                    sys.stderr.buffer.write(data)
-                    sys.stderr.buffer.flush()
-            except FFmpegError as err:
-                log.ffmpeg("Error from ffmpeg: %s", str(err).strip())
-                last_ex = err
-            except FFmpegWarning:
-                pass
-        else:
-            break
-
-    if last_ex:
-        future.set_exception(last_ex)
-    else:
-        future.set_result(True)
-
-def check_stderr(data:bytes):
-    '''Checks stderr with the given data'''
-    try:
-        data = data.decode('utf8')
-    except:
-        log.ffmpeg("Unknown error decoding message from ffmpeg", exc_info=True)
-        return True
-
-    # TODO: Regex
-    warnings = [
-        "Header missing",
-        "Estimating duration from birate, this may be inaccurate",
-        "Using AVStream.codec to pass codec parameters to muxers is deprecated, use "
-        "AVStream.codecpar instead.",
-        "Application provided invalid, non monotonically increasing dts to muxer in stream",
-        "Last message repeated",
-        "Failed to send close message",
-        "decode_band_types: Input buffer exhausted before END element found"
-    ]
-    errors = [
-        # need to regex this properly, its both a warning and an error
-        "Invalid data found when processing input",
-    ]
-
-    if any(msg in data for msg in warnings):
-        raise FFmpegWarning(data)
-
-    if any(msg in data for msg in errors):
-        raise FFmpegError(data)
-
-    return True
-
-
-# if redistributing ffmpeg is an issue, it can be downloaded from here:
-#  - http://ffmpeg.zeranoe.com/builds/win32/static/ffmpeg-latest-win32-static.7z
-#  - http://ffmpeg.zeranoe.com/builds/win64/static/ffmpeg-latest-win64-static.7z
-#
-# Extracting bin/ffmpeg.exe, bin/ffplay.exe, and bin/ffprobe.exe should be fine
-# However, the files are in 7z format so meh
-# I don't know if we can even do this for the user, at most we open it in the browser
-# I can't imagine the user is so incompetent that they can't pull 3 files out of it...
-# ...
-# ...right?
-
-# Get duration with ffprobe
-#   ffprobe.exe -v error -show_entries format=duration -of default=noprint_wrappers=1:nokey=1 -sexagesimal filename.mp3
-# This is also how I fix the format checking issue for now
-# ffprobe -v quiet -print_format json -show_format stream
-
-# Normalization filter
-# -af dynaudnorm
+    def _loop_song(self, msg: object):
+        """
+        Loop the currently playing song by replaying the same audio file via
+        `discord.PCMVolumeTransformer()`.
+        """
+        source = PCMVolumeTransformer(FFmpegPCMAudio(self.filename))
+        loop = asyncio.get_event_loop()
+        msg.voice_client.play(source, after=lambda a: loop.create_task(self._done(msg)))
+        msg.voice_client.source.volume = self.volume
