@@ -56,7 +56,6 @@ class MusicBot(Bot):
         self.autoplaylist = load_file(self.config.auto_playlist_file)
 
         self.aiolocks = defaultdict(asyncio.Lock)
-        self.downloader = Downloader(download_folder='audio_cache')
 
         # TODO: Do these properly
         ssd_defaults = {

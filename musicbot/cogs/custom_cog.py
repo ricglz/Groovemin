@@ -50,10 +50,6 @@ class CustomCog(Cog):
     def autoplaylist(self):
         return self.bot.autoplaylist
 
-    @property
-    def downloader(self):
-        return self.bot.downloader
-
     async def check_last_msg(self, guild: Guild):
         '''
         Checks the last message send to the specified guild, if it exists then
@@ -89,11 +85,3 @@ class CustomCog(Cog):
 
     async def _get_player(self, channel) -> MusicPlayer:
         return await self._get_player_cog().get_player(channel)
-
-    async def _get_song_info(self, player: MusicPlayer, song_url: str):
-        return await self.downloader.extract_info(
-            player.playlist.loop,
-            song_url,
-            download=False,
-            process=False
-        )

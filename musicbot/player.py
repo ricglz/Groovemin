@@ -6,10 +6,48 @@ from enum import Enum
 import asyncio
 import logging
 import os
+import random
+import string
 
-from discord import FFmpegPCMAudio, PCMVolumeTransformer
+from discord import Color, Embed, FFmpegPCMAudio, PCMVolumeTransformer
+from youtube_dl import YoutubeDL
+
+from .downloader import Downloader
 
 log = logging.getLogger(__name__)
+
+ytdl_format_options = {
+    'audioquality': 5,
+    'format': 'bestaudio',
+    'outtmpl': '{}',
+    'restrictfilenames': True,
+    'flatplaylist': True,
+    'nocheckcertificate': True,
+    'ignoreerrors': True,
+    'logtostderr': False,
+    "extractaudio": True,
+    "audioformat": "opus",
+    'quiet': True,
+    'no_warnings': True,
+    'default_search': 'auto',
+    # bind to ipv4 since ipv6 addresses cause issues sometimes
+    'source_address': '0.0.0.0'
+}
+
+def filename_generator():
+    """
+    Generate a unique file name for the song file to be named as
+    """
+    chars = string.ascii_letters + string.digits
+    name = ''
+    for _ in range(random.randint(9, 25)):
+        name += random.choice(chars)
+
+    return name
+
+def random_color():
+    '''Generates random color'''
+    return Color.from_rgb(random.randint(1, 255), random.randint(1, 255), random.randint(1, 255))
 
 class MusicPlayerState(Enum):
     '''Enum class representing the state that the MusicPlayer is currently at.'''
@@ -33,10 +71,12 @@ class QueueElement:
 @dataclass
 class MusicPlayer:
     '''Class in charge of all the music management'''
-    author: Optional[object] = None
-    current_title: Optional[str] = None
-    filename: Optional[str] = None
+    loop: asyncio.AbstractEventLoop
+
     _queue: List[QueueElement] = []
+    author: Optional[object] = None
+    current_title: Optional[Downloader] = None
+    filename: Optional[str] = None
     state: MusicPlayerState = MusicPlayerState.STOPPED
     volume: float = 0.5
 
@@ -50,10 +90,12 @@ class MusicPlayer:
 
     @property
     def has_queue(self):
+        '''Property to check if the player has remaining queue'''
         return len(self._queue) > 0
 
     async def queue(self, song_query, msg):
         '''Appends to the queue the data created by the downloader'''
+        title, data = Downloader.get_info(song_query)
         if data['queue']:
             self._queue_playlist(data, msg)
             return await msg.send(f"Added playlist {data['title']} to queue")
@@ -73,37 +115,42 @@ class MusicPlayer:
         if is_still:
             await msg.voice_client.disconnect()
 
-    async def start_song(self, song_query, msg):
+    def _create_yt_dl(self):
         new_opts = ytdl_format_options.copy()
-        audio_name = await self.filename_generator()
-
-        self.player['audio_files'].append(audio_name)
+        audio_name = filename_generator()
         new_opts['outtmpl'] = new_opts['outtmpl'].format(audio_name)
-        self.player[msg.guild.id]['name'] = audio_name
+        self.filename = audio_name
+        return YoutubeDL(new_opts)
 
-        ytdl = youtube_dl.YoutubeDL(new_opts)
-        download1 = await Downloader.video_url(song, ytdl=ytdl, loop=self.bot.loop)
-        download = download1[0]
-        data = download1[1]
-        emb = discord.Embed(colour=self.random_color, title='Now Playing',
-                            description=download.title, url=download.url)
+    @staticmethod
+    def _create_now_playing_emb(download: Downloader, msg):
+        emb = Embed(colour=random_color(), title='Now Playing',
+                    description=download.title, url=download.url)
         emb.set_thumbnail(url=download.thumbnail)
         emb.set_footer(
             text=f'Requested by {msg.author.display_name}', icon_url=msg.author.avatar_url)
+        return emb
+
+    async def start_song(self, song_query, msg):
+        '''Starts the given song'''
+        yt_dl = self._create_yt_dl()
+
+        download, data = await Downloader.video_url(song_query, yt_dl, loop=self.loop)
         loop = asyncio.get_event_loop()
 
         if data['queue']:
-            await self.playlist(data, msg)
+            await self._queue_playlist(data, msg)
 
-        msgId = await msg.send(embed=emb)
-        self.player[msg.guild.id]['player'] = download
-        self.player[msg.guild.id]['author'] = msg
+        emb = self._create_now_playing_emb(download, msg)
+        msg_id = await msg.send(embed=emb).id
+        self.current_title = download
+        self.author = msg
         msg.voice_client.play(
-            download, after=lambda a: loop.create_task(self.done(msg, msgId.id)))
+            download, after=lambda a: loop.create_task(self._done(msg, msg_id)))
 
         # if str(msg.guild.id) in self.music: #NOTE adds user's default volume if in database
         #     msg.voice_client.source.volume=self.music[str(msg.guild.id)]['vol']/100
-        msg.voice_client.source.volume = self.player[msg.guild.id]['volume']
+        msg.voice_client.source.volume = self.volume
         return msg.voice_client
 
     async def _done(self, msg: object, msg_id: Optional[int]=None):
@@ -123,7 +170,7 @@ class MusicPlayer:
 
         if self._queue:
             next_element = self._queue.pop(0)
-            return await self._start_song(next_element.author, next_element.title)
+            return await self.start_song(next_element.author, next_element.title)
         await self._voice_check(msg)
 
     def _loop_song(self, msg: object):

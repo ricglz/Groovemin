@@ -42,12 +42,13 @@ class PlayerCog(Cog):
             log.debug("Deserializing queue for %s", guild.id)
 
             with open(filepath, 'r', encoding='utf8') as file:
+                # TODO: Acutally use the data by doing other stuff
                 data = file.read()
 
-        return MusicPlayer.from_json(data)
+        return MusicPlayer(self.bot.loop)
 
     async def _init_player(self):
-        player = MusicPlayer()
+        player = MusicPlayer(self.bot.loop)
 
     async def get_player(self, channel, create=False, *, deserialize=False) -> MusicPlayer:
         '''
