@@ -90,6 +90,10 @@ class MusicPlayer:
         '''Property to check if the player has remaining queue'''
         return len(self._queue) > 0
 
+    @property
+    def in_queue(self):
+        return self._queue
+
     async def queue(self, song_query, msg):
         '''Appends to the queue the data created by the downloader'''
         title, data = Downloader.get_info(song_query)
