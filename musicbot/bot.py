@@ -15,7 +15,6 @@ from dislash import InteractionClient
 from .aliases import Aliases, AliasesDefault
 from .config import Config, ConfigDefaults
 from .constants import VERSION as BOTVERSION
-from .downloader import Downloader
 from .exceptions import MusicbotException, TerminateSignal
 from .json import Json
 from .opus_loader import load_opus_lib

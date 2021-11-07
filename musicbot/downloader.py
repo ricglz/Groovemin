@@ -1,4 +1,6 @@
 '''Module containing the main downloader class'''
+from concurrent.futures import ThreadPoolExecutor
+
 import asyncio
 import logging
 
@@ -24,6 +26,8 @@ simulate = {
 
 ffmpeg_options = {'options': '-vn'}
 
+executor = ThreadPoolExecutor()
+
 class Downloader(PCMVolumeTransformer):
     def __init__(self, source, *, data, volume=0.5):
         super().__init__(source, volume)
@@ -43,7 +47,7 @@ class Downloader(PCMVolumeTransformer):
         download: bool
     ):
         return await loop.run_in_executor(
-            None,
+            executor,
             lambda: yt_dl.extract_info(query, download=download)
         )
 

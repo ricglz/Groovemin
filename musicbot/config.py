@@ -289,13 +289,71 @@ class FilesConfig(SectionConfig):
         apn_name, apn_ext = os.path.splitext(ap_name)
         self.auto_playlist_removed_file = os.path.join(ap_path, apn_name + '_removed' + apn_ext)
 
+def find_config(config_file):
+    '''Finds the config file'''
+    config = ConfigParser(interpolation=None)
+
+    if not os.path.isfile(config_file):
+        ini_file = config_file + '.ini'
+        if os.path.isfile(ini_file):
+            shutil.move(ini_file, config_file)
+            log.info(
+                "Moving %s to %s, you should probably turn file extensions on.",
+                ini_file,
+                config_file
+            )
+
+        elif os.path.isfile('config/example_options.ini'):
+            shutil.copy('config/example_options.ini', config_file)
+            log.warning('Options file not found, copying example_options.ini')
+
+        else:
+            raise HelpfulError(
+                "Your config files are missing. Neither options.ini nor example_options.ini "
+                "were found.",
+                "Grab the files back from the archive or remake them yourself and copy paste "
+                "the content from the repo. Stop removing important files!"
+            )
+
+    if not config.read(config_file, encoding='utf-8'):
+        config = ConfigParser()
+        try:
+            # load the config again and check to see if the user edited that one
+            config.read(config_file, encoding='utf-8')
+
+            if not int(config.get('Permissions', 'OwnerID', fallback=0)): # jake pls no flame
+                print(flush=True)
+                log.critical("Please configure config/options.ini and re-run the bot.")
+                sys.exit(1)
+
+        # Config id value was changed but its not valid
+        except ValueError as err:
+            raise HelpfulError(
+                'Invalid value "{}" for OwnerID, config cannot be loaded. '.format(
+                    config.get('Permissions', 'OwnerID', fallback=None)
+                ),
+                "The OwnerID option requires a user ID or 'auto'."
+            ) from err
+
+        except Exception as err:
+            print(flush=True)
+            log.critical(
+                "Unable to copy config/example_options.ini to %s",
+                config_file,
+                exc_info=err
+            )
+            sys.exit(2)
+
+    config.read(config_file, encoding='utf-8')
+    check_confsections(config)
+
+    return config
 class Config:
     '''Main file for managing the configuration of the bot'''
     missing_keys = set()
 
-    def __init__(self, config_file):
-        self.config_file = config_file
-        config = self.find_config()
+    def __init__(self, config_file: str):
+        config = find_config(config_file)
 
         self.configs = [
             CredentialsConfig(config),
@@ -309,12 +367,6 @@ class Config:
         self.run_checks()
         self.check_changes(config)
         self.find_autoplaylist()
-
-    def __getattribute__(self, name: str):
-        for config_class in self.configs:
-            if hasattr(config_class, name):
-                return config_class.__getattribute__(name)
-        raise AttributeError(f'Config does not have {name} attribute')
 
     @staticmethod
     def get_all_keys(conf):
@@ -360,66 +412,6 @@ class Config:
         for config_class in self.configs:
             config_class.async_validate(bot)
 
-    def find_config(self):
-        '''Finds the config file'''
-        config = ConfigParser(interpolation=None)
-
-        if not os.path.isfile(self.config_file):
-            ini_file = self.config_file + '.ini'
-            if os.path.isfile(ini_file):
-                shutil.move(ini_file, self.config_file)
-                log.info(
-                    "Moving %s to %s, you should probably turn file extensions on.",
-                    ini_file,
-                    self.config_file
-                )
-
-            elif os.path.isfile('config/example_options.ini'):
-                shutil.copy('config/example_options.ini', self.config_file)
-                log.warning('Options file not found, copying example_options.ini')
-
-            else:
-                raise HelpfulError(
-                    "Your config files are missing. Neither options.ini nor example_options.ini "
-                    "were found.",
-                    "Grab the files back from the archive or remake them yourself and copy paste "
-                    "the content from the repo. Stop removing important files!"
-                )
-
-        if not config.read(self.config_file, encoding='utf-8'):
-            config = ConfigParser()
-            try:
-                # load the config again and check to see if the user edited that one
-                config.read(self.config_file, encoding='utf-8')
-
-                if not int(config.get('Permissions', 'OwnerID', fallback=0)): # jake pls no flame
-                    print(flush=True)
-                    log.critical("Please configure config/options.ini and re-run the bot.")
-                    sys.exit(1)
-
-            # Config id value was changed but its not valid
-            except ValueError as err:
-                raise HelpfulError(
-                    'Invalid value "{}" for OwnerID, config cannot be loaded. '.format(
-                        config.get('Permissions', 'OwnerID', fallback=None)
-                    ),
-                    "The OwnerID option requires a user ID or 'auto'."
-                ) from err
-
-            except Exception as err:
-                print(flush=True)
-                log.critical(
-                    "Unable to copy config/example_options.ini to %s",
-                    self.config_file,
-                    exc_info=err
-                )
-                sys.exit(2)
-
-        config.read(self.config_file, encoding='utf-8')
-        check_confsections(config)
-
-        return config
-
     def find_autoplaylist(self):
         '''Finds auto_playlist file'''
         if not os.path.exists(self.auto_playlist_file):
@@ -428,6 +420,13 @@ class Config:
                 log.debug("Copying _autoplaylist.txt to autoplaylist.txt")
             else:
                 log.warning("No autoplaylist file found.")
+
+    def __getattr__(self, name: str):
+        for config_class in self.configs:
+            if hasattr(config_class, name):
+                return config_class.__getattribute__(name)
+        raise AttributeError(f'Config does not have {name} attribute')
+
 
 class ConfigDefaults:
     '''Class containing the default values of the bot configuration'''

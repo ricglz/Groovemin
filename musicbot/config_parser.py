@@ -14,6 +14,8 @@ class ConfigParser(BaseConfigParser):
     def get_set(self, section: str, option: str, *, raw=False, vars=None, fallback=None):
         '''Gets a set for the given section and option.'''
         option_value = self.get(section, option, raw=raw, vars=vars, fallback=fallback)
+        if isinstance(option_value, set):
+            return option_value
         if option_value is None:
             return set()
         return set(self.str_to_list(option_value))

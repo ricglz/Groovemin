@@ -48,9 +48,9 @@ class PlayerCog(Cog):
         return MusicPlayer(self.bot.loop)
 
     async def _init_player(self):
-        player = MusicPlayer(self.bot.loop)
+        return MusicPlayer(self.bot.loop)
 
-    async def get_player(self, channel, create=False, *, deserialize=False) -> MusicPlayer:
+    async def get_player(self, channel, create=True, *, deserialize=False) -> MusicPlayer:
         '''
         Gets player by either of the following ways:
         * Fetching a cached player
@@ -77,14 +77,9 @@ class PlayerCog(Cog):
                     # I should never need to reconnect
                     return player
 
-            if not create:
-                raise CommandError(
-                    'The bot is not in a voice channel.  '
-                    'Use %ssummon to summon it to your voice channel.' % self.config.command_prefix)
-
             log.debug('Will create new player')
 
-            return self._init_player()
+            return await self._init_player()
 
 
     def get_player_in(self, guild: Guild) -> MusicPlayer:

@@ -1,5 +1,5 @@
 '''Class containing logic for Player Class'''
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import List, Optional
 from enum import Enum
 
@@ -9,7 +9,7 @@ import os
 import random
 import string
 
-from discord import Color, Embed, FFmpegPCMAudio, PCMVolumeTransformer
+from discord import Color, Embed, FFmpegPCMAudio, PCMVolumeTransformer, VoiceClient
 from youtube_dl import YoutubeDL
 
 from .downloader import Downloader
@@ -17,21 +17,18 @@ from .downloader import Downloader
 log = logging.getLogger(__name__)
 
 ytdl_format_options = {
-    'audioquality': 5,
-    'format': 'bestaudio',
+    'format': 'bestaudio/best',
     'outtmpl': '{}',
     'restrictfilenames': True,
-    'flatplaylist': True,
+    'noplaylist': True,
     'nocheckcertificate': True,
-    'ignoreerrors': True,
+    'ignoreerrors': False,
     'logtostderr': False,
-    "extractaudio": True,
-    "audioformat": "opus",
     'quiet': True,
     'no_warnings': True,
     'default_search': 'auto',
-    # bind to ipv4 since ipv6 addresses cause issues sometimes
-    'source_address': '0.0.0.0'
+    'source_address': '0.0.0.0',
+    'usenetrc': True
 }
 
 def filename_generator():
@@ -73,7 +70,7 @@ class MusicPlayer:
     '''Class in charge of all the music management'''
     loop: asyncio.AbstractEventLoop
 
-    _queue: List[QueueElement] = []
+    _queue: List[QueueElement] = field(default_factory=list)
     author: Optional[object] = None
     current_title: Optional[Downloader] = None
     filename: Optional[str] = None
@@ -106,14 +103,14 @@ class MusicPlayer:
         """Clear the local dict data"""
         os.remove(self.filename)
 
-    async def _voice_check(self, msg: object):
+    async def _voice_check(self, voice_client: VoiceClient):
         '''Bot leave voice channel if music not being played for longer than 2 minutes,'''
-        if msg.voice_client is None:
+        if voice_client is None:
             return
         await asyncio.sleep(120)
-        is_still = msg.voice_client.is_playing() is False and msg.voice_client.is_paused() is False
+        is_still = voice_client.is_playing() is False and voice_client.is_paused() is False
         if is_still:
-            await msg.voice_client.disconnect()
+            await voice_client.disconnect()
 
     def _create_yt_dl(self):
         new_opts = ytdl_format_options.copy()
@@ -131,29 +128,33 @@ class MusicPlayer:
             text=f'Requested by {msg.author.display_name}', icon_url=msg.author.avatar_url)
         return emb
 
-    async def start_song(self, song_query, msg):
-        '''Starts the given song'''
-        yt_dl = self._create_yt_dl()
-
-        download, data = await Downloader.video_url(song_query, yt_dl, loop=self.loop)
+    async def _start_song(self, download: str, msg: object, voice_client: VoiceClient):
+        emb = self._create_now_playing_emb(download, msg)
+        msg_id = (await msg.send(embed=emb)).id
+        self.current_title = download
+        self.author = msg
         loop = asyncio.get_event_loop()
+        voice_client.play(
+            download,
+            after=lambda a: loop.create_task(self._done(msg, voice_client, msg_id))
+        )
+        voice_client.source.volume = self.volume
+
+    async def start_song(self, song_query, msg, voice_client: VoiceClient):
+        '''Starts the given song'''
+        self.state = MusicPlayerState.PLAYING
+
+        yt_dl = self._create_yt_dl()
+        actual_msg = msg.send('Processing song')
+        download, data = await Downloader.video_url(song_query, yt_dl, loop=self.loop)
 
         if data['queue']:
             await self._queue_playlist(data, msg)
 
-        emb = self._create_now_playing_emb(download, msg)
-        msg_id = await msg.send(embed=emb).id
-        self.current_title = download
-        self.author = msg
-        msg.voice_client.play(
-            download, after=lambda a: loop.create_task(self._done(msg, msg_id)))
+        actual_msg.delete()
+        await self._start_song(download, msg, voice_client)
 
-        # if str(msg.guild.id) in self.music: #NOTE adds user's default volume if in database
-        #     msg.voice_client.source.volume=self.music[str(msg.guild.id)]['vol']/100
-        msg.voice_client.source.volume = self.volume
-        return msg.voice_client
-
-    async def _done(self, msg: object, msg_id: Optional[int]=None):
+    async def _done(self, msg: object, voice_client: VoiceClient, msg_id: Optional[int]=None):
         '''Function to run once song completes.'''
         if msg_id:
             message = await msg.channel.fetch_message(msg_id)
@@ -161,24 +162,29 @@ class MusicPlayer:
 
         if self.state == MusicPlayerState.RESET:
             self.state = MusicPlayerState.PLAYING
-            return await self._loop_song(msg)
+            return await self._loop_song(msg, voice_client)
 
         if self.state == MusicPlayerState.LOOP:
-            return await self._loop_song(msg)
+            return await self._loop_song(msg, voice_client)
 
-        await self._clear_data()
+        self._clear_data()
 
         if self._queue:
             next_element = self._queue.pop(0)
-            return await self.start_song(next_element.author, next_element.title)
-        await self._voice_check(msg)
+            return await self.start_song(
+                next_element.title, next_element.author, voice_client
+            )
+        await self._voice_check(voice_client)
 
-    def _loop_song(self, msg: object):
+    def _loop_song(self, msg: object, voice_client: VoiceClient):
         """
         Loop the currently playing song by replaying the same audio file via
         `discord.PCMVolumeTransformer()`.
         """
         source = PCMVolumeTransformer(FFmpegPCMAudio(self.filename))
         loop = asyncio.get_event_loop()
-        msg.voice_client.play(source, after=lambda a: loop.create_task(self._done(msg)))
-        msg.voice_client.source.volume = self.volume
+        voice_client.play(
+            source,
+            after=lambda a: loop.create_task(self._done(msg, voice_client))
+        )
+        voice_client.source.volume = self.volume

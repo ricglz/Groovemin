@@ -6,7 +6,7 @@ import logging
 import re
 import time
 
-from discord import Member
+from discord import Guild, Member, VoiceClient
 from discord.ext.commands import Context
 from dislash import command, Option, OptionType
 
@@ -124,7 +124,7 @@ class PlayCog(CustomCog):
         for i in items:
             song_query = i['name'] + ' ' + i['artists'][0]['name']
             log.debug('Processing %s', song_query)
-            await self._play(context, song_query, spotify=True)
+            await self._play(context, song_query)
         await self.safe_delete_message(procmsg)
 
         return self.str.get(
@@ -152,7 +152,7 @@ class PlayCog(CustomCog):
             song_query = i['track']['name'] + ' ' + i['track']['artists'][0]['name']
             log.debug('Processing %s', song_query)
             try:
-                await self._play(context, song_query, spotify=True)
+                await self._play(context, song_query)
             except CommandError:
                 continue
         await self.safe_delete_message(procmsg)
@@ -193,22 +193,28 @@ class PlayCog(CustomCog):
         context: Context,
         song_query: str,
         shuffle: bool = False,
-        spotify: bool = False,
     ):
         song_query = parser_song_url_spotify(song_query)
-        # TODO: Actually create an object
-        play_req = None
-        if self.config._spotify and song_query.startswith('spotify:'):
-            return await self._handle_spotify(play_req, context)
         if not is_link(song_query):
             song_query = f'ytsearch:{song_query}'
-
         player = await self._get_player(context)
+        play_req = PlayRequirements(
+            context.author,
+            context.channel,
+            self.permissions,
+            player,
+            shuffle,
+            song_query
+        )
 
-        if context.voice_client.is_playing() or player.has_queue:
+        if self.config._spotify and song_query.startswith('spotify:'):
+            return await self._handle_spotify(play_req, context)
+
+        voice_client = self._get_voice_client(context.guild)
+        if voice_client.is_playing() or player.has_queue:
             return await player.queue(song_query, context)
 
-        return await player.start_song(song_query, context)
+        return await player.start_song(song_query, context, voice_client)
 
     @command(
         description='Plays given song',
@@ -228,5 +234,53 @@ class PlayCog(CustomCog):
         ]
     )
     async def play(self, context: Context, query: str, shuffle: Optional[bool] = False):
+        await self.before_play(context)
         song_query = parse_song_url(query)
         await self._play(context, song_query, shuffle)
+
+    def _get_voice_client(self, guild: Guild) -> Optional[VoiceClient]:
+        '''Returns the voice client of the guild'''
+        for voice_client in self.voice_clients:
+            if voice_client.guild == guild:
+                return voice_client
+        return None
+
+    async def before_play(self, msg: Context):
+        """
+        Check voice_client
+            - User voice = None:
+                please join a voice channel
+            - bot voice == None:
+                joins the user's voice channel
+            - user and bot voice NOT SAME:
+                - music NOT Playing AND queue EMPTY
+                    join user's voice channel
+                - items in queue:
+                    please join the same voice channel as the bot to add song to queue
+        """
+
+        if msg.author.voice is None:
+            raise CommandError(
+                '**Please join a voice channel to play music**'.title(),
+                expire_in=15
+            )
+
+        voice_client = self._get_voice_client(msg.guild)
+        if voice_client is None:
+            return await msg.author.voice.channel.connect()
+
+        if voice_client.channel == msg.author.voice.channel:
+            return
+
+        player = await self._get_player(msg)
+        # NOTE: Check player and queue
+        if not voice_client.is_playing() and not player.has_queue:
+            return await voice_client.move_to(msg.author.voice.channel)
+            # NOTE: move bot to user's voice channel if queue does not exist
+
+        if player.has_queue:
+            # NOTE: user must join same voice channel if queue exist
+            raise CommandError(
+                'Please join the same voice channel as the bot to add song to queue',
+                expire_in=15
+            )

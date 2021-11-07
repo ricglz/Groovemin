@@ -1,8 +1,9 @@
 '''Module containing the logic for Playlist'''
+from __future__ import annotations
 from collections import deque
 from itertools import islice
 from random import shuffle
-from typing import Callable, Deque, Union
+from typing import Callable, Deque, TYPE_CHECKING, Union
 import datetime
 import logging
 import os.path
@@ -10,12 +11,14 @@ import os.path
 from urllib.error import URLError
 from youtube_dl.utils import DownloadError, UnsupportedError
 
-from .bot import MusicBot
 from .constructs import Serializable
 from .entry import URLPlaylistEntry, StreamPlaylistEntry
 from .exceptions import ExtractionError, WrongEntryTypeError
 from .lib.event_emitter import EventEmitter
 from .utils import get_header
+
+if TYPE_CHECKING:
+    from ..bot import MusicBot
 
 log = logging.getLogger(__name__)
 
