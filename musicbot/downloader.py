@@ -5,8 +5,9 @@ import asyncio
 import logging
 
 from discord import FFmpegPCMAudio, PCMVolumeTransformer
-
 from youtube_dl import YoutubeDL
+
+from .exceptions import CommandError
 
 log = logging.getLogger(__name__)
 
@@ -46,10 +47,15 @@ class Downloader(PCMVolumeTransformer):
         query: str,
         download: bool
     ):
-        return await loop.run_in_executor(
-            executor,
-            lambda: yt_dl.extract_info(query, download=download)
-        )
+        try:
+            return await loop.run_in_executor(
+                executor,
+                lambda: yt_dl.extract_info(query, download=download)
+            )
+        except TypeError as err:
+            error_msg = f'{song_query} was unable to be downloaded. Probably'
+            error_msg +=' due to country restrictions or something of that matter'
+            raise CommandError(error_msg) from err
 
     @classmethod
     async def video_url(cls, query: str, yt_dl: YoutubeDL, *, loop=None, stream: bool=False):

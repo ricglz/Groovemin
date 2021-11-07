@@ -81,7 +81,7 @@ class MusicPlayer:
         self._queue.append(QueueElement(title, msg))
 
     def _queue_playlist(self, data, msg):
-        """THIS FUNCTION IS FOR WHEN YOUTUBE LINK IS A PLAYLIST."""
+        '''This function is for when youtube link is a playlist.'''
         for title in data['queue']:
             self._queue.append(QueueElement(title, msg))
 
@@ -92,16 +92,15 @@ class MusicPlayer:
 
     @property
     def in_queue(self):
+        '''Public property of queue list'''
         return self._queue
 
     async def queue(self, song_query, msg):
         '''Appends to the queue the data created by the downloader'''
-        title, data = Downloader.get_info(song_query)
+        title, data = await Downloader.get_info(song_query)
         if data['queue']:
             self._queue_playlist(data, msg)
-            return await msg.send(f"Added playlist {data['title']} to queue")
         self._add_to_queue(title, msg)
-        return await msg.send(f"**{title} added to queue**".title())
 
     def _clear_data(self):
         """Clear the local dict data"""
