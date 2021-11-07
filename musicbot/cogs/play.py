@@ -194,20 +194,21 @@ class PlayCog(CustomCog):
         song_query: str,
         shuffle: bool = False,
     ):
-        song_query = parser_song_url_spotify(song_query)
+        await self.before_play(context)
         if not is_link(song_query):
             song_query = f'ytsearch:{song_query}'
+        song_query = parser_song_url_spotify(song_query)
         player = await self._get_player(context)
-        play_req = PlayRequirements(
-            context.author,
-            context.channel,
-            self.permissions,
-            player,
-            shuffle,
-            song_query
-        )
 
         if self.config._spotify and song_query.startswith('spotify:'):
+            play_req = PlayRequirements(
+                context.author,
+                context.channel,
+                self.permissions,
+                player,
+                shuffle,
+                song_query
+            )
             return await self._handle_spotify(play_req, context)
 
         voice_client = self._get_voice_client(context.guild)
@@ -234,7 +235,6 @@ class PlayCog(CustomCog):
         ]
     )
     async def play(self, context: Context, query: str, shuffle: Optional[bool] = False):
-        await self.before_play(context)
         song_query = parse_song_url(query)
         await self._play(context, song_query, shuffle)
 
