@@ -1,7 +1,6 @@
 '''Class containing logic for Player Class'''
 from dataclasses import dataclass, field
 from typing import List, Optional
-from enum import Enum
 
 import asyncio
 import logging
@@ -13,11 +12,11 @@ from discord import Color, Embed, FFmpegPCMAudio, PCMVolumeTransformer, VoiceCli
 from youtube_dl import YoutubeDL
 
 from .downloader import Downloader
+from .player_state import MusicPlayerStateHandler
 
 log = logging.getLogger(__name__)
 
 ytdl_format_options = {
-    'format': 'bestaudio/best',
     'outtmpl': '{}',
     'restrictfilenames': True,
     'noplaylist': True,
@@ -46,19 +45,6 @@ def random_color():
     '''Generates random color'''
     return Color.from_rgb(random.randint(1, 255), random.randint(1, 255), random.randint(1, 255))
 
-class MusicPlayerState(Enum):
-    '''Enum class representing the state that the MusicPlayer is currently at.'''
-    STOPPED = 0  # When the player isn't playing anything
-    PLAYING = 1  # The player is actively playing music.
-    PAUSED = 2   # The player is paused on a song.
-    WAITING = 3  # The player has finished its song but is still downloading the next one
-    DEAD = 4     # The player has been killed.
-    RESET = 5    # The player is playing but will play the same song when finished
-    LOOP = 6     # The player is playing but will play the same song until go out of the loop
-
-    def __str__(self):
-        return self.name
-
 @dataclass
 class QueueElement:
     '''Represents an element of the music player queue'''
@@ -66,7 +52,7 @@ class QueueElement:
     author: object
 
 @dataclass
-class MusicPlayer:
+class MusicPlayer(MusicPlayerStateHandler):
     '''Class in charge of all the music management'''
     loop: asyncio.AbstractEventLoop
 
@@ -74,7 +60,6 @@ class MusicPlayer:
     author: Optional[object] = None
     current_title: Optional[Downloader] = None
     filename: Optional[str] = None
-    state: MusicPlayerState = MusicPlayerState.STOPPED
     volume: float = 0.5
 
     def _add_to_queue(self, title, msg):
@@ -148,13 +133,13 @@ class MusicPlayer:
         self.state = MusicPlayerState.PLAYING
 
         yt_dl = self._create_yt_dl()
-        actual_msg = msg.send('Processing song')
+        actual_msg = await msg.send(f'Processing {song_query}')
         download, data = await Downloader.video_url(song_query, yt_dl, loop=self.loop)
 
         if data['queue']:
             await self._queue_playlist(data, msg)
 
-        actual_msg.delete()
+        await actual_msg.delete()
         await self._start_song(download, msg, voice_client)
 
     async def _done(self, msg: object, voice_client: VoiceClient, msg_id: Optional[int]=None):
