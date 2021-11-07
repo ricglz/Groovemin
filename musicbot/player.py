@@ -12,7 +12,7 @@ from discord import Color, Embed, FFmpegPCMAudio, PCMVolumeTransformer, VoiceCli
 from youtube_dl import YoutubeDL
 
 from .downloader import Downloader
-from .player_state import MusicPlayerStateHandler
+from .player_state import MusicPlayerState, MusicPlayerStateHandler
 
 log = logging.getLogger(__name__)
 
@@ -130,7 +130,7 @@ class MusicPlayer(MusicPlayerStateHandler):
 
     async def start_song(self, song_query, msg, voice_client: VoiceClient):
         '''Starts the given song'''
-        self.state = MusicPlayerState.PLAYING
+        self.start_playing()
 
         yt_dl = self._create_yt_dl()
         actual_msg = await msg.send(f'Processing {song_query}')
@@ -148,11 +148,11 @@ class MusicPlayer(MusicPlayerStateHandler):
             message = await msg.channel.fetch_message(msg_id)
             await message.delete()
 
-        if self.state == MusicPlayerState.RESET:
+        if self.is_reset:
             self.state = MusicPlayerState.PLAYING
             return await self._loop_song(msg, voice_client)
 
-        if self.state == MusicPlayerState.LOOP:
+        if self.is_looped:
             return await self._loop_song(msg, voice_client)
 
         self._clear_data()

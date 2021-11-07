@@ -31,7 +31,7 @@ class MusicManagerCog(Cog):
         player.pause()
         msg = self.str.get(
             'cmd-pause-reply', 'Paused music in `{0.name}`'
-        ).format(player.voice_client.channel)
+        ).format(context.channel)
         await self.safe_send_message(context, msg)
 
     @command(description='Resumes the audio from where it stopped')
@@ -172,14 +172,14 @@ class MusicManagerCog(Cog):
         player = await self._get_player(context.channel)
         lines = []
         unlisted = 0
-        and_more_text = '* ... and %s more*' % ('x' * len(player.playlist.entries))
+        and_more_text = '* ... and %s more*' % ('x' * len(player.in_queue))
 
         is_currently_playing = player.is_playing and player.progress
         if is_currently_playing:
             lines.append(self._is_playing_line(player))
 
         current_line_sum = len(lines[0]) + 1 if is_currently_playing else 0
-        for i, item in enumerate(player.playlist, 1):
+        for i, item in enumerate(player.in_queue, 1):
             next_line = self._get_next_line(i, item)
             potential_len = current_line_sum + len(next_line) + len(and_more_text)
             if potential_len > DISCORD_MSG_CHAR_LIMIT or \

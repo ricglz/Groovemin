@@ -48,14 +48,16 @@ class Downloader(PCMVolumeTransformer):
         download: bool
     ):
         try:
-            return await loop.run_in_executor(
+            data = await loop.run_in_executor(
                 executor,
                 lambda: yt_dl.extract_info(query, download=download)
             )
-        except TypeError as err:
-            error_msg = f'{song_query} was unable to be downloaded. Probably'
+            assert data
+        except (TypeError, AssertionError) as err:
+            error_msg = f'{query} was unable to be downloaded. Probably'
             error_msg +=' due to country restrictions or something of that matter'
             raise CommandError(error_msg) from err
+        return data
 
     @classmethod
     async def video_url(cls, query: str, yt_dl: YoutubeDL, *, loop=None, stream: bool=False):

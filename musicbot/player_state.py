@@ -1,5 +1,4 @@
 '''Module containing the MusicPlayer state management'''
-from dataclasses import dataclass
 from enum import Enum
 
 class MusicPlayerState(Enum):
@@ -15,7 +14,6 @@ class MusicPlayerState(Enum):
     def __str__(self):
         return self.name
 
-@dataclass
 class MusicPlayerStateHandler:
     '''Helper class to handle music state'''
     state: MusicPlayerState = MusicPlayerState.STOPPED
@@ -24,26 +22,50 @@ class MusicPlayerStateHandler:
     def is_stopped(self):
         return self.state == MusicPlayerState.STOPPED
 
+    def stop_playing(self):
+        self.state = MusicPlayerState.STOPPED
+
     @property
     def is_playing(self):
         return self.state == MusicPlayerState.PLAYING
+
+    def start_playing(self):
+        self.state = MusicPlayerState.PLAYING
+
+    def resume(self):
+        self.start_playing()
 
     @property
     def is_paused(self):
         return self.state == MusicPlayerState.PAUSED
 
+    def pause(self):
+        self.state = MusicPlayerState.PAUSED
+
     @property
     def is_waiting(self):
         return self.state == MusicPlayerState.WAITING
+
+    def wait(self):
+        self.state = MusicPlayerState.WAITING
 
     @property
     def is_dead(self):
         return self.state == MusicPlayerState.DEAD
 
+    def finish(self):
+        self.state = MusicPlayerState.DEAD
+
     @property
     def is_reset(self):
         return self.state == MusicPlayerState.RESET
 
+    def reset(self):
+        self.state = MusicPlayerState.RESET
+
     @property
     def is_looped(self):
         return self.state == MusicPlayerState.LOOP
+
+    def loop(self):
+        self.state = MusicPlayerState.LOOP
